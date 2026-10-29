@@ -36,6 +36,8 @@ Run these commands before committing:
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo nextest run --workspace
+cargo nextest run --workspace --no-tests=warn
 cargo test --workspace --doc
 ```
+
+Drop `--no-tests=warn` once the workspace contains tests.
