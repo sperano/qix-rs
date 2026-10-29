@@ -1,2 +1,2 @@
-this is a clone of the classic https://en.wikipedia.org/wiki/Qix game, in rust using egui and nextest
+Follow the repository instructions in [CLAUDE.md](CLAUDE.md).
 
