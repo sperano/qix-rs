@@ -1,0 +1,9 @@
+# nextest configuration: https://nexte.st/docs/configuration/
+
+[profile.ci]
+# Run every test and report all failures, not only the first one.
+fail-fast = false
+
+[profile.ci.junit]
+# Written to target/nextest/ci/junit.xml.
+path = "junit.xml"
