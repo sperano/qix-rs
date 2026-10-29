@@ -1,0 +1,11 @@
+[package]
+name = "qix"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+eframe = "0.37"
+qix-core.workspace = true
+
+[lints]
+workspace = true

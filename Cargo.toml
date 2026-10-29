@@ -1,6 +1,14 @@
-[package]
-name = "qix"
+[workspace]
+resolver = "3"
+members = ["crates/qix-core", "crates/qix"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[workspace.dependencies]
+qix-core = { path = "crates/qix-core" }
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+unwrap_used = "deny"
