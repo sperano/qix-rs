@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  # Pull request runs already test the branch merged with main.
   push:
+    branches: [main]
   pull_request:
 
 concurrency:
