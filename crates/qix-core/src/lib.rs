@@ -9,6 +9,7 @@ mod border;
 pub mod game;
 pub mod geometry;
 pub mod input;
+pub mod marker;
 pub mod tuning;
 
 #[cfg(test)]
@@ -19,8 +20,11 @@ mod border_test;
 mod game_test;
 #[cfg(test)]
 mod geometry_test;
+#[cfg(test)]
+mod marker_test;
 
 pub use board::{Board, Cell, DrawKind};
 pub use game::Game;
 pub use geometry::{Dir, Point};
 pub use input::InputState;
+pub use marker::{Marker, MarkerState};
