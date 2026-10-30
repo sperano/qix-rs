@@ -33,12 +33,18 @@ impl Marker {
     /// follows a border edge of `board`; otherwise it stays put. Returns
     /// whether it moved.
     pub fn step_along_border(&mut self, board: &Board, dir: Dir) -> bool {
-        let next = board
-            .border_neighbours(self.pos)
-            .find_map(|(edge_dir, next)| (edge_dir == dir).then_some(next));
+        let next = self.border_step(board, dir);
         if let Some(next) = next {
             self.pos = next;
         }
         next.is_some()
+    }
+
+    /// The lattice point one step towards `dir` along a border edge of
+    /// `board`, if that edge is border.
+    pub fn border_step(&self, board: &Board, dir: Dir) -> Option<Point> {
+        board
+            .border_neighbours(self.pos)
+            .find_map(|(edge_dir, next)| (edge_dir == dir).then_some(next))
     }
 }

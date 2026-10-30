@@ -1,4 +1,4 @@
-use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS};
+use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS, SLOW_STEP_TICKS};
 use crate::{Board, Cell, Dir, DrawKind, Game, InputState, MarkerState, Point};
 
 /// Dimensions of the small board the lap and corner tests use.
@@ -16,6 +16,29 @@ fn holding(dir: Dir) -> InputState {
         dir: Some(dir),
         ..InputState::default()
     }
+}
+
+/// `dir` held with the draw button of `kind`.
+fn drawing(dir: Dir, kind: DrawKind) -> InputState {
+    InputState {
+        fast: kind == DrawKind::Fast,
+        slow: kind == DrawKind::Slow,
+        ..holding(dir)
+    }
+}
+
+/// The ticks one step of a stix drawn with `kind` takes.
+fn draw_step_ticks(kind: DrawKind) -> u32 {
+    match kind {
+        DrawKind::Fast => MARKER_STEP_TICKS,
+        DrawKind::Slow => SLOW_STEP_TICKS,
+    }
+}
+
+/// Ticks `game` long enough for `steps` steps of a stix drawn towards
+/// `dir` with `kind`.
+fn draw(game: &mut Game, dir: Dir, kind: DrawKind, steps: u32) {
+    hold(game, drawing(dir, kind), steps * draw_step_ticks(kind));
 }
 
 /// Ticks `game` `ticks` times with the same input.
@@ -163,4 +186,159 @@ fn marker_turns_the_corners_around_a_claimed_cell() {
         walk(&mut game, dir, 1);
         assert_eq!(game.marker().pos, pos, "{dir:?}");
     }
+}
+
+#[test]
+fn a_draw_button_and_a_move_into_free_space_start_a_stix() {
+    let mut game = Game::with_board(Board::new(W, H));
+    let start = game.marker().pos;
+
+    draw(&mut game, Dir::Up, DrawKind::Fast, 1);
+
+    let head = Point::new(start.x, start.y - 1);
+    assert_eq!(game.marker().pos, head);
+    assert_eq!(game.marker().state, MarkerState::Drawing);
+    let stix = game.stix().unwrap();
+    assert_eq!(stix.points(), [start, head]);
+    assert_eq!(stix.kinds(), [DrawKind::Fast]);
+}
+
+#[test]
+fn each_draw_button_steps_at_its_speed() {
+    for kind in [DrawKind::Fast, DrawKind::Slow] {
+        let mut game = Game::new();
+        let start = game.marker().pos;
+        let step_ticks = draw_step_ticks(kind);
+
+        for tick in 1..=STEPS * step_ticks {
+            game.tick(&drawing(Dir::Up, kind));
+            let steps = u16::try_from(tick / step_ticks).unwrap();
+            assert_eq!(
+                game.marker().pos,
+                Point::new(start.x, start.y - steps),
+                "{kind:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_slow_button_follows_the_border_at_marker_speed() {
+    let mut game = Game::new();
+    let start = game.marker().pos;
+
+    hold(
+        &mut game,
+        drawing(Dir::Left, DrawKind::Slow),
+        STEPS * MARKER_STEP_TICKS,
+    );
+
+    let steps = u16::try_from(STEPS).unwrap();
+    assert_eq!(game.marker().pos, Point::new(start.x - steps, start.y));
+    assert_eq!(game.marker().state, MarkerState::OnBorder);
+}
+
+#[test]
+fn releasing_both_draw_buttons_stops_the_marker_on_the_stix() {
+    let mut game = Game::new();
+    draw(&mut game, Dir::Up, DrawKind::Fast, 1);
+    let head = game.marker().pos;
+
+    walk(&mut game, Dir::Up, STEPS);
+
+    assert_eq!(game.marker().pos, head);
+    assert_eq!(game.marker().state, MarkerState::Drawing);
+    assert_eq!(game.stix().unwrap().head(), head);
+}
+
+#[test]
+fn pressing_a_draw_button_again_resumes_drawing() {
+    let mut game = Game::new();
+    draw(&mut game, Dir::Up, DrawKind::Fast, 1);
+    let head = game.marker().pos;
+    hold(
+        &mut game,
+        drawing(Dir::Up, DrawKind::Fast),
+        MARKER_STEP_TICKS - 1,
+    );
+    game.tick(&holding(Dir::Up));
+
+    hold(
+        &mut game,
+        drawing(Dir::Up, DrawKind::Slow),
+        SLOW_STEP_TICKS - 1,
+    );
+    assert_eq!(game.marker().pos, head);
+    game.tick(&drawing(Dir::Up, DrawKind::Slow));
+
+    assert_eq!(game.marker().pos, Point::new(head.x, head.y - 1));
+    assert_eq!(
+        game.stix().unwrap().kinds(),
+        [DrawKind::Fast, DrawKind::Slow]
+    );
+}
+
+#[test]
+fn a_single_fast_segment_makes_the_claim_fast() {
+    let mut game = Game::new();
+
+    draw(&mut game, Dir::Up, DrawKind::Slow, 2);
+    draw(&mut game, Dir::Left, DrawKind::Fast, 1);
+    draw(&mut game, Dir::Up, DrawKind::Slow, 1);
+
+    let stix = game.stix().unwrap();
+    assert_eq!(
+        stix.kinds(),
+        [DrawKind::Slow, DrawKind::Fast, DrawKind::Slow]
+    );
+    assert_eq!(stix.claim_kind(), DrawKind::Fast);
+}
+
+#[test]
+fn a_stix_drawn_slow_throughout_claims_slow() {
+    let mut game = Game::new();
+
+    draw(&mut game, Dir::Up, DrawKind::Slow, 2);
+    draw(&mut game, Dir::Right, DrawKind::Slow, 1);
+
+    assert_eq!(game.stix().unwrap().claim_kind(), DrawKind::Slow);
+}
+
+#[test]
+fn an_illegal_draw_step_leaves_the_marker_drawing_where_it_is() {
+    let mut game = Game::new();
+    draw(&mut game, Dir::Up, DrawKind::Fast, 2);
+    let stix = game.stix().unwrap().clone();
+
+    draw(&mut game, Dir::Down, DrawKind::Fast, 1);
+
+    assert_eq!(game.marker().pos, stix.head());
+    assert_eq!(game.marker().state, MarkerState::Drawing);
+    assert_eq!(game.stix(), Some(&stix));
+}
+
+#[test]
+fn a_draw_step_off_the_board_starts_no_stix() {
+    let mut game = Game::new();
+    let start = game.marker().pos;
+
+    draw(&mut game, Dir::Down, DrawKind::Fast, 1);
+
+    assert_eq!(game.marker().pos, start);
+    assert_eq!(game.marker().state, MarkerState::OnBorder);
+    assert_eq!(game.stix(), None);
+}
+
+#[test]
+fn reaching_the_border_closes_the_stix() {
+    let mut game = Game::with_board(Board::new(W, H));
+    let start = game.marker().pos;
+
+    draw(&mut game, Dir::Up, DrawKind::Fast, u32::from(H));
+
+    assert_eq!(game.marker().pos, Point::new(start.x, 0));
+    assert_eq!(game.marker().state, MarkerState::OnBorder);
+    assert_eq!(game.stix(), None);
+    walk(&mut game, Dir::Left, 1);
+    assert_eq!(game.marker().pos, Point::new(start.x - 1, 0));
 }

@@ -13,3 +13,7 @@ pub const BOARD_H: u16 = 120;
 /// Ticks between two lattice steps of the marker while a direction is
 /// held.
 pub const MARKER_STEP_TICKS: u32 = 2;
+
+/// Ticks between two lattice steps of the marker drawing a slow stix: half
+/// the speed of a fast one, which steps every [`MARKER_STEP_TICKS`].
+pub const SLOW_STEP_TICKS: u32 = 2 * MARKER_STEP_TICKS;

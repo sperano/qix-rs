@@ -1,5 +1,6 @@
 //! The player's controls, as the front end hands them to the core.
 
+use crate::board::DrawKind;
 use crate::geometry::Dir;
 
 /// The controls one [`crate::Game::tick`] sees.
@@ -20,4 +21,18 @@ pub struct InputState {
     pub confirm: bool,
     /// Pause was pressed.
     pub pause: bool,
+}
+
+impl InputState {
+    /// The kind of stix the held draw buttons draw, if any: fast when the
+    /// fast button is held, whatever the slow one does.
+    pub fn draw_kind(&self) -> Option<DrawKind> {
+        if self.fast {
+            Some(DrawKind::Fast)
+        } else if self.slow {
+            Some(DrawKind::Slow)
+        } else {
+            None
+        }
+    }
 }
