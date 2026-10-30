@@ -192,3 +192,34 @@ fn points_beyond_the_lattice_are_not_on_the_border() {
         assert!(neighbours(&board, point).is_empty(), "{point:?}");
     }
 }
+
+#[test]
+fn edges_inside_a_fresh_board_are_free() {
+    let board = board();
+    let inner = Point::new(1, 1);
+
+    for dir in Dir::ALL {
+        assert!(board.is_free_edge(inner, dir), "{dir:?}");
+    }
+}
+
+#[test]
+fn border_edges_and_edges_off_the_lattice_are_not_free() {
+    let board = board();
+    let bottom = Point::new(W / 2, H);
+
+    assert!(board.is_free_edge(bottom, Dir::Up));
+    for dir in [Dir::Down, Dir::Left, Dir::Right] {
+        assert!(!board.is_free_edge(bottom, dir), "{dir:?}");
+    }
+}
+
+#[test]
+fn an_edge_between_claimed_cells_is_not_free() {
+    let mut board = board();
+    board.set_cell(0, 0, FAST);
+    board.set_cell(0, 1, SLOW);
+
+    assert!(!board.is_free_edge(Point::new(1, 1), Dir::Left));
+    assert!(board.is_free_edge(Point::new(1, 1), Dir::Right));
+}

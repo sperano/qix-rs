@@ -1,5 +1,7 @@
 //! Geometry of the playfield.
 
+use std::cmp::Ordering;
+
 /// A corner of a cell: a point of the `(W+1) x (H+1)` lattice the marker,
 /// the stix and the Sparx move on.
 ///
@@ -53,6 +55,18 @@ impl Dir {
             Self::Down => y.checked_add(1).map(|y| Point::new(x, y)),
             Self::Left => x.checked_sub(1).map(|x| Point::new(x, y)),
             Self::Right => x.checked_add(1).map(|x| Point::new(x, y)),
+        }
+    }
+
+    /// The direction from `from` straight to `to`, or `None` when the two
+    /// are the same point or share neither a row nor a column.
+    pub fn between(from: Point, to: Point) -> Option<Self> {
+        match (from.x.cmp(&to.x), from.y.cmp(&to.y)) {
+            (Ordering::Equal, Ordering::Greater) => Some(Self::Up),
+            (Ordering::Equal, Ordering::Less) => Some(Self::Down),
+            (Ordering::Greater, Ordering::Equal) => Some(Self::Left),
+            (Ordering::Less, Ordering::Equal) => Some(Self::Right),
+            _ => None,
         }
     }
 }

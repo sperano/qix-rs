@@ -40,3 +40,26 @@ fn step_past_the_coordinate_range_is_none() {
     assert_eq!(Dir::Down.step(Point::new(4, u16::MAX)), None);
     assert_eq!(Dir::Right.step(Point::new(u16::MAX, 4)), None);
 }
+
+#[test]
+fn between_points_the_way_of_a_straight_run() {
+    let from = Point::new(3, 3);
+    let runs = [
+        (Point::new(3, 1), Dir::Up),
+        (Point::new(3, 4), Dir::Down),
+        (Point::new(0, 3), Dir::Left),
+        (Point::new(5, 3), Dir::Right),
+    ];
+
+    for (to, dir) in runs {
+        assert_eq!(Dir::between(from, to), Some(dir), "{to:?}");
+    }
+}
+
+#[test]
+fn between_has_no_direction_for_the_same_point_or_a_diagonal() {
+    let from = Point::new(3, 3);
+
+    assert_eq!(Dir::between(from, from), None);
+    assert_eq!(Dir::between(from, Point::new(4, 4)), None);
+}
