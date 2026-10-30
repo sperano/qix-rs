@@ -9,6 +9,9 @@ const H: u16 = 5;
 /// The column of the vertical cuts: cells left of it are `x < CUT_X`.
 const CUT_X: u16 = 3;
 
+/// The row of the horizontal cut: cells below it are `y >= CUT_Y`.
+const CUT_Y: u16 = 2;
+
 const FAST: DrawKind = DrawKind::Fast;
 const SLOW: DrawKind = DrawKind::Slow;
 
@@ -153,13 +156,27 @@ fn a_cut_ending_on_a_claimed_area_claims_only_free_cells() {
     for y in 0..H {
         board.set_cell(claimed_x, y, Cell::Claimed(FAST));
     }
-    let stix = drawn_with(Point::new(CUT_X, H), &run(Dir::Up, H), SLOW);
+    let stix = drawn_with(Point::new(0, CUT_Y), &run(Dir::Right, claimed_x), SLOW);
 
     let count = claim(&mut board, &stix, (0, 0));
 
-    assert_eq!(count, usize::from((claimed_x - CUT_X) * H));
-    assert_eq!(board.cell(i32::from(claimed_x), 0), Cell::Claimed(FAST));
-    assert_eq!(board.cell(i32::from(CUT_X), 0), Cell::Claimed(SLOW));
+    let below: Vec<_> = cells(&board)
+        .filter(|&(x, y)| x < claimed_x && y >= CUT_Y)
+        .collect();
+    assert_eq!(count, below.len());
+    for (x, y) in below {
+        assert_eq!(board.cell(i32::from(x), i32::from(y)), Cell::Claimed(SLOW));
+    }
+    for y in 0..H {
+        assert_eq!(
+            board.cell(i32::from(claimed_x), i32::from(y)),
+            Cell::Claimed(FAST)
+        );
+    }
+    let above: Vec<_> = cells(&board)
+        .filter(|&(x, y)| x < claimed_x && y < CUT_Y)
+        .collect();
+    assert_eq!(free_cells(&board), above);
 }
 
 #[test]
