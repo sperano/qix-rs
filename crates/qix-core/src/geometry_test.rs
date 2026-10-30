@@ -1,7 +1,5 @@
 use crate::{Dir, Point};
 
-const ALL: [Dir; 4] = [Dir::Up, Dir::Down, Dir::Left, Dir::Right];
-
 #[test]
 fn opposite_pairs_the_directions() {
     assert_eq!(Dir::Up.opposite(), Dir::Down);
@@ -12,7 +10,7 @@ fn opposite_pairs_the_directions() {
 
 #[test]
 fn opposite_twice_is_the_same_direction() {
-    for dir in ALL {
+    for dir in Dir::ALL {
         assert_eq!(dir.opposite().opposite(), dir);
     }
 }
@@ -29,7 +27,7 @@ fn step_moves_one_lattice_unit_with_y_growing_down() {
 #[test]
 fn stepping_back_returns_to_the_start() {
     let point = Point::new(3, 3);
-    for dir in ALL {
+    for dir in Dir::ALL {
         let next = dir.step(point).and_then(|next| dir.opposite().step(next));
         assert_eq!(next, Some(point), "{dir:?}");
     }

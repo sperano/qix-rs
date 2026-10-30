@@ -5,6 +5,7 @@
 //! headlessly; the `qix` binary renders its state with egui.
 
 pub mod board;
+mod border;
 pub mod game;
 pub mod geometry;
 pub mod input;
@@ -12,6 +13,8 @@ pub mod tuning;
 
 #[cfg(test)]
 mod board_test;
+#[cfg(test)]
+mod border_test;
 #[cfg(test)]
 mod game_test;
 #[cfg(test)]
