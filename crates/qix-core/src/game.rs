@@ -106,9 +106,9 @@ impl Game {
     /// stix when the marker is on the border; an illegal step leaves the
     /// marker where it is.
     ///
-    /// A step onto a border point closes the stix and puts the marker
-    /// back on the border. Claiming the area it encloses is not
-    /// implemented yet, so the closed stix is dropped.
+    /// A step onto a border point closes the stix: the area it cuts off
+    /// from [`Game::claim_seed`] is claimed, the stix is dropped and the
+    /// marker is back on the border, at the closing point.
     fn draw(&mut self, dir: Dir, kind: DrawKind) {
         let mut stix = self
             .stix
@@ -121,11 +121,18 @@ impl Game {
         stix.push(next, kind);
         self.marker.pos = next;
         if self.board.is_border(next) {
+            self.board.close_stix(&stix, self.claim_seed());
             self.marker.state = MarkerState::OnBorder;
         } else {
             self.marker.state = MarkerState::Drawing;
             self.stix = Some(stix);
         }
+    }
+
+    /// The cell whose area stays free when a stix closes: the centre of
+    /// the board, until the Qix takes its place.
+    fn claim_seed(&self) -> (u16, u16) {
+        (self.board.width() / 2, self.board.height() / 2)
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::claim::{claim, flood_free};
 use crate::tuning::{BOARD_H, BOARD_W};
-use crate::{BitSet, Board, Cell, Dir, DrawKind, Point, Stix};
+use crate::{BitSet, Board, Cell, ClaimResult, Dir, DrawKind, Point, Stix};
 
 /// Dimensions of the board the tests cut.
 const W: u16 = 6;
@@ -216,4 +216,30 @@ fn a_full_size_board_floods_without_recursion() {
     let set = flood_free(&board, &Stix::new(Point::new(0, BOARD_H)), (0, 0));
 
     assert_eq!(set.count(), usize::from(BOARD_W) * usize::from(BOARD_H));
+}
+
+#[test]
+fn closing_a_cut_reports_its_cells_the_claimed_fraction_and_kind() {
+    let mut board = Board::new(W, H);
+    let stix = drawn_with(Point::new(CUT_X, H), &run(Dir::Up, H), SLOW);
+
+    let result = board.close_stix(&stix, (0, 0));
+
+    let cells = usize::from((W - CUT_X) * H);
+    let expected = ClaimResult {
+        cells,
+        fraction: board.claimed_fraction(),
+        kind: SLOW,
+    };
+    assert_eq!(result, Some(expected));
+    assert_eq!(expected.fraction, cells as f32 / f32::from(W * H));
+}
+
+#[test]
+fn closing_a_stix_that_encloses_nothing_reports_none() {
+    let mut board = Board::new(W, H);
+    let stix = drawn_with(Point::new(CUT_X, H), &run(Dir::Up, H - 1), FAST);
+
+    assert_eq!(board.close_stix(&stix, (0, H - 1)), None);
+    assert_eq!(board, Board::new(W, H));
 }

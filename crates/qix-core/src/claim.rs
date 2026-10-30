@@ -2,8 +2,36 @@
 //! cell, and the claim of every other free cell.
 
 use crate::bitset::BitSet;
-use crate::board::{Board, Cell};
+use crate::board::{Board, Cell, DrawKind};
 use crate::stix::Stix;
+
+/// What closing a stix claimed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ClaimResult {
+    /// The cells the stix claimed.
+    pub cells: usize,
+    /// The board's claimed fraction after the claim, from 0 to 1.
+    pub fraction: f32,
+    /// How the claimed cells were drawn: [`Stix::claim_kind`].
+    pub kind: DrawKind,
+}
+
+impl Board {
+    /// Closes `stix`: [`claim`]s every free cell outside the area holding
+    /// the cell `seed`. Returns `None` when the stix enclosed nothing.
+    ///
+    /// The border follows by itself, since [`Board::is_border`] reads the
+    /// cells: the stix's points now lie between the claimed cells and the
+    /// free area kept.
+    pub fn close_stix(&mut self, stix: &Stix, seed: (u16, u16)) -> Option<ClaimResult> {
+        let cells = claim(self, stix, seed);
+        (cells > 0).then(|| ClaimResult {
+            cells,
+            fraction: self.claimed_fraction(),
+            kind: stix.claim_kind(),
+        })
+    }
+}
 
 /// The free cells reachable from the cell `seed` by steps between
 /// 4-adjacent free cells that do not cross a segment of `stix`.
