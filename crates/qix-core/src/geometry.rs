@@ -28,6 +28,9 @@ pub enum Dir {
 }
 
 impl Dir {
+    /// Every direction, in declaration order.
+    pub const ALL: [Self; 4] = [Self::Up, Self::Down, Self::Left, Self::Right];
+
     /// The direction pointing the other way.
     pub const fn opposite(self) -> Self {
         match self {
