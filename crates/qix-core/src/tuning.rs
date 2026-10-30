@@ -4,8 +4,8 @@
 /// `1 / TICK_HZ` seconds.
 pub const TICK_HZ: u32 = 60;
 
-/// Playfield width in cells.
-pub const PLAYFIELD_WIDTH: u16 = 160;
+/// Board width in cells; the playfield is one unit per cell.
+pub const BOARD_W: u16 = 160;
 
-/// Playfield height in cells.
-pub const PLAYFIELD_HEIGHT: u16 = 120;
+/// Board height in cells; the playfield is one unit per cell.
+pub const BOARD_H: u16 = 120;

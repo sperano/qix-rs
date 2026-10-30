@@ -4,14 +4,20 @@
 //! The crate has no UI dependency, so every rule runs and is tested
 //! headlessly; the `qix` binary renders its state with egui.
 
+pub mod board;
 pub mod game;
 pub mod geometry;
 pub mod input;
 pub mod tuning;
 
 #[cfg(test)]
+mod board_test;
+#[cfg(test)]
 mod game_test;
+#[cfg(test)]
+mod geometry_test;
 
+pub use board::{Board, Cell, DrawKind};
 pub use game::Game;
-pub use geometry::Dir;
+pub use geometry::{Dir, Point};
 pub use input::InputState;

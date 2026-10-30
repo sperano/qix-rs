@@ -1,5 +1,5 @@
 use eframe::egui::{Pos2, Rect, Vec2, pos2, vec2};
-use qix_core::tuning::{PLAYFIELD_HEIGHT, PLAYFIELD_WIDTH};
+use qix_core::tuning::{BOARD_H, BOARD_W};
 
 use crate::playfield::{letterbox, playfield_units, to_screen};
 
@@ -16,7 +16,7 @@ const AREAS: [Vec2; 5] = [
 ];
 
 fn aspect() -> f32 {
-    f32::from(PLAYFIELD_WIDTH) / f32::from(PLAYFIELD_HEIGHT)
+    f32::from(BOARD_W) / f32::from(BOARD_H)
 }
 
 fn assert_near(actual: Pos2, expected: Pos2) {
