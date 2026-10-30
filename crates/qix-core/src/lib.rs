@@ -36,6 +36,7 @@ mod stix_test;
 
 pub use bitset::BitSet;
 pub use board::{Board, Cell, DrawKind};
+pub use claim::ClaimResult;
 pub use game::Game;
 pub use geometry::{Dir, Point};
 pub use input::InputState;

@@ -339,6 +339,88 @@ fn reaching_the_border_closes_the_stix() {
     assert_eq!(game.marker().pos, Point::new(start.x, 0));
     assert_eq!(game.marker().state, MarkerState::OnBorder);
     assert_eq!(game.stix(), None);
-    walk(&mut game, Dir::Left, 1);
-    assert_eq!(game.marker().pos, Point::new(start.x - 1, 0));
+    walk(&mut game, Dir::Down, 1);
+    assert_eq!(game.marker().pos, Point::new(start.x, 1));
+}
+
+/// The claimed cells of `board` in reading order.
+fn claimed_cells(board: &Board) -> Vec<(u16, u16)> {
+    let (width, height) = (board.width(), board.height());
+    (0..height)
+        .flat_map(|y| (0..width).map(move |x| (x, y)))
+        .filter(|&(x, y)| board.cell(i32::from(x), i32::from(y)).is_claimed())
+        .collect()
+}
+
+#[test]
+fn closing_a_stix_claims_the_side_without_the_centre_cell() {
+    let mut game = Game::with_board(Board::new(W, H));
+    let cut_x = game.marker().pos.x;
+
+    draw(&mut game, Dir::Up, DrawKind::Slow, u32::from(H));
+
+    let board = game.board();
+    for y in 0..H {
+        for x in 0..W {
+            let expected = if x < cut_x {
+                Cell::Claimed(DrawKind::Slow)
+            } else {
+                Cell::Free
+            };
+            let cell = board.cell(i32::from(x), i32::from(y));
+            assert_eq!(cell, expected, "({x}, {y})");
+        }
+    }
+    let claimed = f32::from(cut_x) / f32::from(W);
+    assert_eq!(board.claimed_fraction(), claimed);
+}
+
+/// Draws the L-shaped stix on the `W x H` board: up one step from the
+/// marker's start, then left to the left edge, which closes it and claims
+/// the cells below it. Returns the game and the stix's lattice points.
+fn closed_l() -> (Game, Vec<Point>) {
+    let mut game = Game::with_board(Board::new(W, H));
+    let start = game.marker().pos;
+    draw(&mut game, Dir::Up, DrawKind::Fast, 1);
+    draw(&mut game, Dir::Left, DrawKind::Fast, u32::from(start.x));
+    let corner_y = start.y - 1;
+    let mut points = vec![start];
+    points.extend((0..=start.x).rev().map(|x| Point::new(x, corner_y)));
+    (game, points)
+}
+
+#[test]
+fn the_former_stix_points_are_all_border_points() {
+    let (game, points) = closed_l();
+
+    assert_eq!(game.stix(), None);
+    let (start, corner) = (points[0], points[1]);
+    let below_l: Vec<_> = (corner.y..H)
+        .flat_map(|y| (0..start.x).map(move |x| (x, y)))
+        .collect();
+    assert_eq!(claimed_cells(game.board()), below_l);
+    for point in points {
+        assert!(game.board().is_border(point), "{point:?}");
+    }
+}
+
+#[test]
+fn the_marker_ends_on_the_border_at_the_closing_point() {
+    let (game, points) = closed_l();
+
+    assert_eq!(game.marker().pos, *points.last().unwrap());
+    assert_eq!(game.marker().state, MarkerState::OnBorder);
+}
+
+#[test]
+fn the_marker_walks_the_new_border_back_to_the_stix_start() {
+    let (mut game, points) = closed_l();
+    let (start, corner) = (points[0], points[1]);
+
+    walk(&mut game, Dir::Right, u32::from(corner.x));
+    assert_eq!(game.marker().pos, corner);
+    walk(&mut game, Dir::Down, 1);
+
+    assert_eq!(game.marker().pos, start);
+    assert_eq!(game.marker().state, MarkerState::OnBorder);
 }
