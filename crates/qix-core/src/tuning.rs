@@ -9,3 +9,7 @@ pub const BOARD_W: u16 = 160;
 
 /// Board height in cells; the playfield is one unit per cell.
 pub const BOARD_H: u16 = 120;
+
+/// Ticks between two lattice steps of the marker while a direction is
+/// held.
+pub const MARKER_STEP_TICKS: u32 = 2;
