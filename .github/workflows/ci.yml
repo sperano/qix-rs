@@ -42,9 +42,8 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      # --no-tests=warn: the workspace has no tests yet; drop it once it does.
       - name: Tests
-        run: cargo nextest run --workspace --profile ci --no-tests=warn
+        run: cargo nextest run --workspace --profile ci
 
       - name: Doctests
         run: cargo test --workspace --doc
