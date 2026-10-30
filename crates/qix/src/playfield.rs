@@ -4,7 +4,7 @@
 use eframe::egui::{
     self, Color32, Frame, Pos2, Rect, Sense, Stroke, StrokeKind, emath::RectTransform, vec2,
 };
-use qix_core::tuning::{PLAYFIELD_HEIGHT, PLAYFIELD_WIDTH};
+use qix_core::tuning::{BOARD_H, BOARD_W};
 
 const WINDOW_BACKGROUND: Color32 = Color32::BLACK;
 const PLAYFIELD_BACKGROUND: Color32 = Color32::from_rgb(16, 16, 40);
@@ -27,10 +27,7 @@ pub fn panel_frame() -> Frame {
 /// The playfield in its own units: one unit per cell, origin at the top
 /// left.
 pub fn playfield_units() -> Rect {
-    Rect::from_min_size(
-        Pos2::ZERO,
-        vec2(f32::from(PLAYFIELD_WIDTH), f32::from(PLAYFIELD_HEIGHT)),
-    )
+    Rect::from_min_size(Pos2::ZERO, vec2(f32::from(BOARD_W), f32::from(BOARD_H)))
 }
 
 /// The largest rectangle with the playfield's aspect ratio that fits in
