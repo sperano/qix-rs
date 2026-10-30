@@ -95,14 +95,12 @@ impl Move {
 /// The game just before a tick, as the invariants compare it.
 struct Before {
     claimed: usize,
-    state: MarkerState,
 }
 
 impl Before {
     fn of(game: &Game) -> Self {
         Self {
             claimed: claimed_cells(game.board()),
-            state: game.marker().state,
         }
     }
 }
@@ -157,7 +155,8 @@ fn stix_move(game: &Game, stix: &Stix, rng: &mut Rng) -> Option<Move> {
 }
 
 /// Holds `step` until the marker moves, calling `check` after every tick,
-/// and returns whether the step closed a stix.
+/// and returns whether the step closed a stix: a draw step that ends on
+/// the border, which also holds for a stix closed by its first step.
 fn play(game: &mut Game, step: Move, check: &impl Fn(&Before, &Game)) -> bool {
     let from = game.marker().pos;
     let input = step.input();
@@ -166,8 +165,7 @@ fn play(game: &mut Game, step: Move, check: &impl Fn(&Before, &Game)) -> bool {
         game.tick(&input);
         check(&before, game);
         if game.marker().pos != from {
-            return before.state == MarkerState::Drawing
-                && game.marker().state == MarkerState::OnBorder;
+            return step.draw.is_some() && game.marker().state == MarkerState::OnBorder;
         }
     }
     panic!("legal move {step:?} from {from:?} did not step");
@@ -210,13 +208,12 @@ fn claimed_cell_count_never_decreases() {
 }
 
 #[test]
-fn no_stix_remains_after_a_close() {
-    for_every_tick(|before, game| {
-        let closed =
-            before.state == MarkerState::Drawing && game.marker().state == MarkerState::OnBorder;
-        if closed {
-            assert_eq!(game.stix(), None);
-        }
+fn a_stix_exists_exactly_while_drawing() {
+    // Covers every close, a stix closed by its first step included: the
+    // marker is back on the border, so no stix may remain.
+    for_every_tick(|_, game| {
+        let drawing = game.marker().state == MarkerState::Drawing;
+        assert_eq!(game.stix().is_some(), drawing, "{:?}", game.marker());
     });
 }
 
