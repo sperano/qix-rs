@@ -14,6 +14,7 @@ const FAST_KEY: Key = Key::Z;
 const SLOW_KEY: Key = Key::X;
 const CONFIRM_KEY: Key = Key::Enter;
 const PAUSE_KEY: Key = Key::Escape;
+const OVERLAY_KEY: Key = Key::F1;
 
 /// Reads one frame's controls: held keys for movement and drawing, fresh
 /// presses (not key repeats) for confirm and pause.
@@ -28,6 +29,13 @@ pub fn sample(input: &egui::InputState) -> InputState {
         confirm: first_press(input, CONFIRM_KEY),
         pause: first_press(input, PAUSE_KEY),
     }
+}
+
+/// Whether the debug overlay key was pressed this frame, ignoring key
+/// repeats. The overlay is the application's, not the game's, so the key
+/// is not part of [`InputState`].
+pub fn overlay_toggled(input: &egui::InputState) -> bool {
+    first_press(input, OVERLAY_KEY)
 }
 
 /// Whether `wanted` went down this frame, ignoring key repeats.

@@ -1,7 +1,7 @@
 use eframe::egui::{self, Event, Key, Modifiers};
 use qix_core::{Dir, InputState};
 
-use crate::input::{InputLatch, sample};
+use crate::input::{InputLatch, overlay_toggled, sample};
 
 fn holding(keys: &[Key]) -> egui::InputState {
     let mut input = egui::InputState::default();
@@ -120,4 +120,29 @@ fn held_controls_follow_the_latest_frame_on_every_tick() {
 
     latch.record(InputState::default());
     assert_eq!(latch.next_tick(), InputState::default());
+}
+
+#[test]
+fn a_fresh_f1_press_toggles_the_overlay() {
+    assert!(overlay_toggled(&with_events(vec![key_event(
+        Key::F1,
+        true,
+        false
+    )])));
+}
+
+#[test]
+fn a_held_or_released_f1_does_not_toggle_the_overlay() {
+    let events = vec![
+        key_event(Key::F1, true, true),
+        key_event(Key::F1, false, false),
+    ];
+    assert!(!overlay_toggled(&with_events(events)));
+    assert!(!overlay_toggled(&holding(&[Key::F1])));
+}
+
+#[test]
+fn the_overlay_key_is_not_game_input() {
+    let input = with_events(vec![key_event(Key::F1, true, false)]);
+    assert_eq!(sample(&input), InputState::default());
 }

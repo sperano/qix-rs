@@ -2,7 +2,9 @@
 
 mod app;
 mod input;
+mod palette;
 mod playfield;
+mod render;
 mod timestep;
 
 #[cfg(test)]

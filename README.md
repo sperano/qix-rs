@@ -13,6 +13,7 @@ Sparx. Slow drawing earns more points but leaves the player exposed longer.
 | X | Draw slowly |
 | Enter | Start or confirm |
 | Escape | Pause |
+| F1 | Toggle the debug overlay (claimed percentage, tick count) |
 
 ## Build and run
 
