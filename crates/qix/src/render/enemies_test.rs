@@ -1,5 +1,9 @@
-use eframe::egui::{self, Color32, Pos2, Rect, Shape, emath::RectTransform, pos2};
-use qix_core::tuning::{BOARD_H, BOARD_W, FUSE_DELAY_TICKS, MARKER_STEP_TICKS, QIX_TRAIL_LEN};
+use std::f32::consts::FRAC_1_SQRT_2;
+
+use eframe::egui::{self, Color32, Pos2, Rect, Shape, Vec2, emath::RectTransform, pos2, vec2};
+use qix_core::tuning::{
+    BOARD_H, BOARD_W, FUSE_DELAY_TICKS, FUSE_STEP_TICKS, MARKER_STEP_TICKS, QIX_TRAIL_LEN,
+};
 use qix_core::{Board, Dir, Game, InputState, Point, Qix, Rng, Sparx, SparxKind};
 
 use crate::palette;
@@ -80,6 +84,20 @@ fn every_other_ray_of_a_spark_is_long() {
 }
 
 #[test]
+fn the_rays_of_a_spark_are_horizontal_diagonal_vertical_and_antidiagonal() {
+    let expected = [
+        vec2(1.0, 0.0),
+        vec2(FRAC_1_SQRT_2, FRAC_1_SQRT_2),
+        vec2(0.0, 1.0),
+        vec2(-FRAC_1_SQRT_2, FRAC_1_SQRT_2),
+    ];
+    for ([a, b], expected) in spark_rays(CENTER, 0).into_iter().zip(expected) {
+        let dir = (b - a).normalized();
+        assert!((dir - expected).length() < EPSILON, "{dir:?} {expected:?}");
+    }
+}
+
+#[test]
 fn a_spark_flickers_by_swapping_its_long_and_short_rays() {
     let still = spark_rays(CENTER, SPARK_FLICKER_TICKS - 1);
     assert_eq!(still, spark_rays(CENTER, 0));
@@ -147,7 +165,25 @@ fn segments_in(shapes: &[Shape], colour: Color32) -> usize {
     shapes.iter().filter(in_colour).count()
 }
 
-/// A Qix standing still across the middle of the board.
+/// The ends and colour of each shape painted as a line segment, in
+/// painting order.
+fn lines(shapes: &[Shape]) -> Vec<([Pos2; 2], Color32)> {
+    shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::LineSegment { points, stroke } => Some((*points, stroke.color)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `(x, y)` in playfield units, on the screen of [`painted`].
+fn on_screen(x: f32, y: f32) -> Pos2 {
+    pos2(x, y) * SCALE
+}
+
+/// A Qix across the middle of the board, at rest until its first tick
+/// kicks it to its slowest speed.
 fn still_qix() -> Qix {
     let mid = f32::from(BOARD_H) / 2.0;
     Qix::new(
@@ -163,13 +199,18 @@ fn game_with(sparx: Vec<Sparx>) -> Game {
     Game::with_board(board, still_qix(), sparx, Rng::new(SEED))
 }
 
+/// Ticks `game` `ticks` times with nothing held.
+fn idle(game: &mut Game, ticks: usize) {
+    for _ in 0..ticks {
+        game.tick(&InputState::default());
+    }
+}
+
 #[test]
 fn the_qix_is_painted_as_its_whole_trail() {
     let mut game = game_with(Vec::new());
     let ticks = palette::QIX_TRAIL.len();
-    for _ in 0..ticks {
-        game.tick(&InputState::default());
-    }
+    idle(&mut game, ticks);
     let shapes = painted(&game);
     assert_eq!(game.qix().trail().len(), ticks + 1);
     for colour in palette::QIX_TRAIL {
@@ -179,6 +220,26 @@ fn the_qix_is_painted_as_its_whole_trail() {
             1
         };
         assert_eq!(segments_in(&shapes, colour), expected, "{colour:?}");
+    }
+}
+
+#[test]
+fn each_trail_segment_is_painted_on_its_ends_oldest_first() {
+    let mut game = game_with(Vec::new());
+    idle(&mut game, QIX_TRAIL_LEN + 1);
+    let trail = game.qix().trail();
+    assert_ne!(trail.front(), trail.back(), "the Qix did not move");
+    let cycle = palette::QIX_TRAIL.len() as u64;
+    let painted = lines(&painted(&game));
+    assert_eq!(painted.len(), trail.len());
+    for (i, (&(a, b), (ends, colour))) in trail.iter().zip(painted).enumerate() {
+        let age = (trail.len() - 1 - i) as u64;
+        let expected = [on_screen(a.x, a.y), on_screen(b.x, b.y)];
+        for (end, expected) in ends.into_iter().zip(expected) {
+            assert!(end.distance(expected) < EPSILON, "segment {i}: {end:?}");
+        }
+        let tick = (game.ticks() - age) % cycle;
+        assert_eq!(colour, palette::QIX_TRAIL[tick as usize], "segment {i}");
     }
 }
 
@@ -200,37 +261,113 @@ fn each_sparx_is_a_spark_in_the_colour_of_its_kind() {
 }
 
 #[test]
+fn each_spark_is_centred_on_its_sparx() {
+    let xs = [10, 50, 100];
+    let sparx = xs.map(|x| Sparx {
+        pos: Point::new(x, 0),
+        dir: Dir::Right,
+        kind: SparxKind::Normal,
+    });
+    let shapes = painted(&game_with(sparx.to_vec()));
+    let rays: Vec<_> = lines(&shapes)
+        .into_iter()
+        .filter(|&(_, colour)| colour == palette::SPARX)
+        .map(|(ends, _)| ends)
+        .collect();
+    assert_eq!(rays.len(), xs.len() * SPARK_RAYS);
+    for (spark, x) in rays.chunks(SPARK_RAYS).zip(xs) {
+        let at = on_screen(f32::from(x), 0.0);
+        for [a, b] in spark {
+            assert!(a.lerp(*b, 0.5).distance(at) < EPSILON, "{a:?} {b:?}");
+        }
+    }
+}
+
+fn drawing(dir: Dir) -> InputState {
+    InputState {
+        dir: Some(dir),
+        fast: true,
+        ..InputState::default()
+    }
+}
+
+/// Ticks `game` long enough for `steps` fast stix steps towards `dir`.
+fn draw(game: &mut Game, dir: Dir, steps: u32) {
+    for _ in 0..steps * MARKER_STEP_TICKS {
+        game.tick(&drawing(dir));
+    }
+}
+
+/// Ticks `game` `ticks` times with the marker standing on its stix.
+fn stand(game: &mut Game, ticks: u32) {
+    let standing = InputState {
+        fast: true,
+        ..InputState::default()
+    };
+    for _ in 0..ticks {
+        game.tick(&standing);
+    }
+}
+
+/// The centres of the circles in `shapes`.
+fn circle_centres(shapes: &[Shape]) -> Vec<Pos2> {
+    shapes
+        .iter()
+        .filter_map(circle)
+        .map(|(center, ..)| center)
+        .collect()
+}
+
+/// The fuse's shapes are all centred on `point`.
+fn assert_fuse_at(shapes: &[Shape], point: Point) {
+    let at = on_screen(f32::from(point.x), f32::from(point.y));
+    let centres = circle_centres(shapes);
+    assert_eq!(centres.len(), FUSE_GLOW_RINGS + 1, "{centres:?}");
+    let offsets: Vec<Vec2> = centres.iter().map(|&center| center - at).collect();
+    assert!(
+        offsets.iter().all(|offset| offset.length() < EPSILON),
+        "{offsets:?}"
+    );
+}
+
+#[test]
 fn no_fuse_is_painted_while_it_is_out() {
     let shapes = painted(&game_with(Vec::new()));
     assert_eq!(shapes.iter().filter_map(circle).count(), 0);
 }
 
 #[test]
+fn no_fuse_is_painted_on_a_stix_before_it_is_lit() {
+    let mut game = game_with(Vec::new());
+    draw(&mut game, Dir::Up, 1);
+    stand(&mut game, FUSE_DELAY_TICKS - 1);
+    assert!(game.stix().is_some(), "no stix");
+    assert_eq!(game.fuse(), None);
+    assert_eq!(circle_centres(&painted(&game)), []);
+}
+
+#[test]
 fn a_lit_fuse_is_painted_at_the_start_of_the_stix() {
     let mut game = game_with(Vec::new());
-    let drawing_up = InputState {
-        dir: Some(Dir::Up),
-        fast: true,
-        ..InputState::default()
-    };
-    for _ in 0..MARKER_STEP_TICKS {
-        game.tick(&drawing_up);
-    }
-    let standing = InputState {
-        fast: true,
-        ..InputState::default()
-    };
-    for _ in 0..FUSE_DELAY_TICKS {
-        game.tick(&standing);
-    }
+    draw(&mut game, Dir::Up, 1);
+    stand(&mut game, FUSE_DELAY_TICKS);
     assert!(game.fuse().is_some(), "the fuse is not lit");
     let start = game.stix().expect("no stix").start();
-    let at = pos2(f32::from(start.x), f32::from(start.y)) * SCALE;
-    let shapes = painted(&game);
-    let dots: Vec<_> = shapes.iter().filter_map(circle).collect();
-    assert_eq!(dots.len(), FUSE_GLOW_RINGS + 1, "{dots:?}");
+    assert_fuse_at(&painted(&game), start);
+}
+
+#[test]
+fn the_fuse_is_painted_on_the_stix_point_it_has_burnt_to() {
+    let mut game = game_with(Vec::new());
+    draw(&mut game, Dir::Up, 2);
+    draw(&mut game, Dir::Right, 2);
+    draw(&mut game, Dir::Up, 1);
+    stand(&mut game, FUSE_DELAY_TICKS + FUSE_STEP_TICKS);
+    let pos = game.fuse().expect("the fuse is not lit").pos;
+    let points = game.stix().expect("no stix").points();
     assert!(
-        dots.iter()
-            .all(|&(center, ..)| center.distance(at) < EPSILON)
+        0 < pos && pos < points.len() - 1,
+        "fuse at {pos} of {points:?}"
     );
+    assert_fuse_at(&painted(&game), points[pos]);
 }
