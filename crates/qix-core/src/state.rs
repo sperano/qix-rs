@@ -30,11 +30,13 @@ pub enum GameState {
     GameOver,
 }
 
-/// A [`Game`] and the [`GameState`] it is in.
+/// A [`Game`], the [`GameState`] it is in and the best score of the
+/// session.
 #[derive(Debug)]
 pub struct Session {
     state: GameState,
     game: Game,
+    high_score: u32,
 }
 
 impl Session {
@@ -43,6 +45,7 @@ impl Session {
         Self {
             state: GameState::Title,
             game,
+            high_score: 0,
         }
     }
 
@@ -56,6 +59,13 @@ impl Session {
         &self.game
     }
 
+    /// The best score of every game of the session, the one being played
+    /// included: it rises with the score as soon as the score passes it,
+    /// and starts at zero.
+    pub fn high_score(&self) -> u32 {
+        self.high_score
+    }
+
     /// Advances the session by one step: [`Game::tick`] with `input`
     /// while [`GameState::Playing`], or the transition `input` asks for.
     ///
@@ -64,7 +74,8 @@ impl Session {
     /// starts (from the title, or the next level) first moves on the
     /// tick after it. A tick of the game raising [`Event::GameOver`] or
     /// [`Event::LevelComplete`] ends play. Out of play, only those presses
-    /// do anything: nothing ticks in [`GameState::Paused`].
+    /// do anything: nothing ticks in [`GameState::Paused`]. Every tick
+    /// raises the high score to the game's score if that is higher.
     pub fn tick(&mut self, input: &InputState) {
         self.state = match self.state {
             GameState::Title if input.confirm => GameState::Playing,
@@ -81,6 +92,7 @@ impl Session {
             }
             state => state,
         };
+        self.high_score = self.high_score.max(self.game.score().points());
     }
 
     /// Ticks the game with `input` and returns the state its events lead

@@ -2,6 +2,7 @@
 
 pub mod board;
 pub mod enemies;
+pub mod hud;
 pub mod overlay;
 pub mod screen;
 
@@ -9,6 +10,8 @@ pub mod screen;
 mod board_test;
 #[cfg(test)]
 mod enemies_test;
+#[cfg(test)]
+mod hud_test;
 #[cfg(test)]
 mod overlay_test;
 #[cfg(test)]

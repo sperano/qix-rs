@@ -2,6 +2,7 @@
 
 mod app;
 mod input;
+mod numbers;
 mod palette;
 mod playfield;
 mod render;
@@ -9,6 +10,8 @@ mod timestep;
 
 #[cfg(test)]
 mod input_test;
+#[cfg(test)]
+mod numbers_test;
 #[cfg(test)]
 mod playfield_test;
 #[cfg(test)]
@@ -18,8 +21,9 @@ use eframe::egui;
 
 const APP_NAME: &str = "Qix";
 
-/// Initial inner size of the window in points, at the playfield's ratio.
-const DEFAULT_WINDOW_SIZE: [f32; 2] = [960.0, 720.0];
+/// Initial inner size of the window in points, at the ratio of the
+/// playfield and the HUD above it.
+const DEFAULT_WINDOW_SIZE: [f32; 2] = [960.0, 792.0];
 
 /// Smallest inner size the window can be resized to, in points.
 const MIN_WINDOW_SIZE: [f32; 2] = [320.0, 240.0];

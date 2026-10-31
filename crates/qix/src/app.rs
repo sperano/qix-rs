@@ -1,5 +1,6 @@
 //! The eframe application: samples input, runs the core ticks each frame
-//! owes, and paints the playfield with the screen of the session's state.
+//! owes, and paints the playfield with the HUD and the screen of the
+//! session's state.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -8,7 +9,7 @@ use qix_core::{Game, Rng, Session};
 
 use crate::input::{self, InputLatch};
 use crate::playfield;
-use crate::render::screen;
+use crate::render::{hud, screen};
 use crate::timestep::FixedTimestep;
 
 /// The application state kept between frames.
@@ -62,8 +63,10 @@ impl eframe::App for QixApp {
         egui::CentralPanel::default()
             .frame(playfield::panel_frame())
             .show(ui, |ui| {
+                let game = self.session.game();
+                let hud = hud::hud(game, self.session.high_score());
                 let screen = screen::screen(&self.session);
-                playfield::show(ui, self.session.game(), screen.as_ref(), self.overlay);
+                playfield::show(ui, game, &hud, screen.as_ref(), self.overlay);
             });
         // The game moves on its own, so every frame is followed by another.
         ui.ctx().request_repaint();
