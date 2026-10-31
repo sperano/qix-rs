@@ -173,7 +173,8 @@ impl Game {
     /// Raises [`Event::Death`] for `cause` and takes a life: the stix and
     /// its fuse are cleared, the marker is back on the border where the
     /// stix began (or stays where it is on the border) and the grace
-    /// period starts. Taking the last life also raises [`Event::GameOver`].
+    /// period starts. Taking the last life raises [`Event::GameOver`]
+    /// instead of starting a grace period.
     fn die(&mut self, cause: DeathCause) {
         self.events.push(Event::Death(cause));
         self.lives -= 1;
@@ -183,9 +184,10 @@ impl Game {
         self.marker.state = MarkerState::OnBorder;
         self.marker_held_ticks = 0;
         self.fuse.put_out();
-        self.grace_ticks = RESPAWN_GRACE_TICKS;
         if self.is_over() {
             self.events.push(Event::GameOver);
+        } else {
+            self.grace_ticks = RESPAWN_GRACE_TICKS;
         }
     }
 

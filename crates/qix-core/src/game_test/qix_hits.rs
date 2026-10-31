@@ -2,7 +2,7 @@
 
 use super::{SEED, drawing};
 use crate::collision::qix_hits_marker;
-use crate::tuning::{FUSE_DELAY_TICKS, MARKER_STEP_TICKS};
+use crate::tuning::MARKER_STEP_TICKS;
 use crate::{Board, Cell, DeathCause, Dir, DrawKind, Event, Game, InputState, Qix, Rng, Vec2};
 
 /// Dimensions of the boards: the marker starts at `(W / 2, H)`.
@@ -134,11 +134,12 @@ fn a_qix_beside_the_stix_does_not_kill() {
     let short_of_column = u32::from(COLUMN) - 1 - start_x;
 
     let mut raised = draw_up_then_right(&mut game, short_of_column);
-    // Not long enough for the fuse to light and kill the standing marker.
-    raised.extend(deaths(&mut game, InputState::default(), FUSE_DELAY_TICKS));
-
     assert!(game.stix().is_some(), "the stix closed");
     assert_eq!(game.marker().pos.x, COLUMN - 1);
+    // The fuse may kill the standing marker meanwhile: `deaths` only
+    // counts the Qix's.
+    raised.extend(deaths(&mut game, InputState::default(), WATCH_TICKS));
+
     assert_eq!(raised, []);
 }
 

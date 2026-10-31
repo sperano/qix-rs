@@ -69,6 +69,21 @@ fn die_by_fuse(game: &mut Game) {
     stand(game, burn_ticks(1));
 }
 
+/// Kills the marker of a [`fuse_game`] by the fuse, then stands and holds
+/// the draw button up so that the marker tries its first step of a stix
+/// `tick` ticks after the death.
+fn try_drawing_at(tick: u32) -> Game {
+    let mut game = fuse_game();
+    die_by_fuse(&mut game);
+    stand(&mut game, tick - MARKER_STEP_TICKS);
+    hold(
+        &mut game,
+        drawing(Dir::Up, DrawKind::Fast),
+        MARKER_STEP_TICKS,
+    );
+    game
+}
+
 /// Ticks `game` `ticks` times with nothing held and returns the tick,
 /// from one, of each death raised.
 fn death_ticks(game: &mut Game, ticks: u32) -> Vec<u32> {
@@ -191,6 +206,24 @@ fn the_marker_cannot_draw_during_the_grace_period() {
 }
 
 #[test]
+fn the_grace_period_ends_after_its_last_tick() {
+    let last = try_drawing_at(RESPAWN_GRACE_TICKS);
+    assert_eq!(last.grace_ticks(), 0);
+    assert_eq!(
+        last.marker().state,
+        MarkerState::OnBorder,
+        "drew on the last tick of the grace period"
+    );
+
+    let after = try_drawing_at(RESPAWN_GRACE_TICKS + 1);
+    assert_eq!(
+        after.marker().state,
+        MarkerState::Drawing,
+        "could not draw on the first tick after the grace period"
+    );
+}
+
+#[test]
 fn the_marker_walks_the_border_during_the_grace_period() {
     let mut game = fuse_game();
     die_by_fuse(&mut game);
@@ -217,6 +250,7 @@ fn losing_the_last_life_raises_game_over() {
     assert_eq!(game.events(), game_over);
     assert_eq!(game.lives(), 0);
     assert!(game.is_over());
+    assert_eq!(game.grace_ticks(), 0, "a grace period after game over");
 }
 
 #[test]
