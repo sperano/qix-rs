@@ -223,3 +223,24 @@ fn an_edge_between_claimed_cells_is_not_free() {
     assert!(!board.is_free_edge(Point::new(1, 1), Dir::Left));
     assert!(board.is_free_edge(Point::new(1, 1), Dir::Right));
 }
+
+#[test]
+fn is_border_edge_agrees_with_the_border_neighbours() {
+    let mut board = board();
+    board.set_cell(0, 0, FAST);
+    board.set_cell(2, 1, SLOW);
+    // One row beyond the lattice on each side, to cover edges leaving it.
+    for y in 0..=H + 1 {
+        for x in 0..=W + 1 {
+            let point = Point::new(x, y);
+            for dir in Dir::ALL {
+                let listed = neighbours(&board, point).iter().any(|&(d, _)| d == dir);
+                assert_eq!(
+                    board.is_border_edge(point, dir),
+                    listed,
+                    "{point:?} {dir:?}"
+                );
+            }
+        }
+    }
+}

@@ -1,26 +1,21 @@
 //! The letterboxed playfield: where it sits in the window and how it is
 //! painted.
 
-use eframe::egui::{
-    self, Color32, Frame, Pos2, Rect, Sense, Stroke, StrokeKind, emath::RectTransform, vec2,
-};
+use eframe::egui::{self, Frame, Pos2, Rect, Sense, emath::RectTransform, vec2};
+use qix_core::Game;
 use qix_core::tuning::{BOARD_H, BOARD_W};
 
-const WINDOW_BACKGROUND: Color32 = Color32::BLACK;
-const PLAYFIELD_BACKGROUND: Color32 = Color32::from_rgb(16, 16, 40);
-const BORDER_COLOR: Color32 = Color32::WHITE;
-
-/// Width of the playfield border, in points.
-const BORDER_WIDTH: f32 = 2.0;
+use crate::palette;
+use crate::render;
 
 /// Gap between the window edge and the playfield, in points; wider than
-/// the border, which is drawn outside the playfield.
+/// the half of the border lines that lies outside the playfield.
 const WINDOW_MARGIN: f32 = 8.0;
 
 /// The frame of the panel holding the playfield.
 pub fn panel_frame() -> Frame {
     Frame::NONE
-        .fill(WINDOW_BACKGROUND)
+        .fill(palette::WINDOW_BACKGROUND)
         .inner_margin(WINDOW_MARGIN)
 }
 
@@ -45,15 +40,15 @@ pub fn to_screen(available: Rect) -> RectTransform {
     RectTransform::from_to(playfield_units(), letterbox(available))
 }
 
-/// Fills `ui` with the playfield: its background and border.
-pub fn show(ui: &mut egui::Ui) {
+/// Fills `ui` with the playfield: its background and `game`'s board, with
+/// the debug overlay on top when `overlay` is set.
+pub fn show(ui: &mut egui::Ui, game: &Game, overlay: bool) {
     let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::hover());
-    let field = to_screen(response.rect).transform_rect(playfield_units());
-    painter.rect_filled(field, 0.0, PLAYFIELD_BACKGROUND);
-    painter.rect_stroke(
-        field,
-        0.0,
-        Stroke::new(BORDER_WIDTH, BORDER_COLOR),
-        StrokeKind::Outside,
-    );
+    let to_screen = to_screen(response.rect);
+    let field = to_screen.transform_rect(playfield_units());
+    painter.rect_filled(field, 0.0, palette::PLAYFIELD_BACKGROUND);
+    render::board::paint(&painter, to_screen, game);
+    if overlay {
+        render::overlay::paint(&painter, field, game);
+    }
 }

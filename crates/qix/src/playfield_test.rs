@@ -1,7 +1,9 @@
-use eframe::egui::{Pos2, Rect, Vec2, pos2, vec2};
+use eframe::egui::{self, Pos2, Rect, Shape, Vec2, pos2, vec2};
+use qix_core::tuning::MARKER_STEP_TICKS;
 use qix_core::tuning::{BOARD_H, BOARD_W};
+use qix_core::{Cell, Dir, DrawKind, Game, InputState};
 
-use crate::playfield::{letterbox, playfield_units, to_screen};
+use crate::playfield::{letterbox, playfield_units, show, to_screen};
 
 /// Tolerance for comparing screen coordinates, in points.
 const EPSILON: f32 = 1e-3;
@@ -73,4 +75,68 @@ fn playfield_corners_map_to_the_letterbox_corners() {
     let field = letterbox(available);
     assert_near(transform.transform_pos(units.min), field.min);
     assert_near(transform.transform_pos(units.max), field.max);
+}
+
+/// Runs one headless egui frame showing `game`'s playfield and returns
+/// the shapes it painted, after checking that they tessellate.
+fn painted(game: &Game, overlay: bool) -> Vec<Shape> {
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(area(vec2(800.0, 600.0))),
+        ..egui::RawInput::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| show(ui, game, overlay));
+    // No renderer uploads the font atlas here; dropping it unapplied panics.
+    output.textures_delta.clear();
+    let shapes = output.shapes.iter().map(|clipped| clipped.shape.clone());
+    let shapes = shapes.collect();
+    let primitives = ctx.tessellate(output.shapes, output.pixels_per_point);
+    assert!(!primitives.is_empty(), "nothing to render");
+    shapes
+}
+
+fn count(shapes: &[Shape], kind: fn(&Shape) -> bool) -> usize {
+    shapes.iter().filter(|&shape| kind(shape)).count()
+}
+
+#[test]
+fn the_playfield_paints_the_claimed_cells_border_and_marker() {
+    let mut board = Game::new().board().clone();
+    board.set_cell(0, 0, Cell::Claimed(DrawKind::Slow));
+    let mut game = Game::with_board(board);
+    game.tick(&InputState::default());
+    let shapes = painted(&game, false);
+    let meshes = count(&shapes, |s| matches!(s, Shape::Mesh(m) if !m.is_empty()));
+    let segments = count(&shapes, |s| matches!(s, Shape::LineSegment { .. }));
+    let polygons = count(&shapes, |s| matches!(s, Shape::Path(p) if p.closed));
+    assert_eq!(meshes, 1, "{shapes:?}");
+    // The four sides, cut short by the claimed corner, and its two edges.
+    assert_eq!(segments, 6, "{shapes:?}");
+    assert_eq!(polygons, 1, "the marker: {shapes:?}");
+    assert_eq!(count(&shapes, |s| matches!(s, Shape::Text(_))), 0);
+}
+
+#[test]
+fn the_overlay_adds_its_text() {
+    let shapes = painted(&Game::new(), true);
+    assert_eq!(count(&shapes, |s| matches!(s, Shape::Text(_))), 1);
+}
+
+#[test]
+fn a_stix_being_drawn_is_painted_as_a_line() {
+    let mut game = Game::new();
+    let drawing_up = InputState {
+        dir: Some(Dir::Up),
+        fast: true,
+        ..InputState::default()
+    };
+    for _ in 0..MARKER_STEP_TICKS {
+        game.tick(&drawing_up);
+    }
+    assert!(game.stix().is_some(), "the marker did not start a stix");
+    let shapes = painted(&game, false);
+    assert_eq!(
+        count(&shapes, |s| matches!(s, Shape::Path(p) if !p.closed)),
+        1
+    );
 }

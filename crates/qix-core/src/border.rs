@@ -20,8 +20,15 @@ impl Board {
         let cells = self.cells_around(point);
         Dir::ALL.into_iter().filter_map(move |dir| {
             let next = dir.step(point)?;
-            is_border_edge(cells, dir).then_some((dir, next))
+            sides_differ(cells, dir).then_some((dir, next))
         })
+    }
+
+    /// The edge from `point` one step towards `dir` is border: the cells on
+    /// its two sides, the outside counting as claimed, differ in
+    /// claimed-ness. An edge leaving the board's lattice never is.
+    pub fn is_border_edge(&self, point: Point, dir: Dir) -> bool {
+        sides_differ(self.cells_around(point), dir)
     }
 
     /// The edge from `point` one step towards `dir` runs through free
@@ -36,7 +43,7 @@ impl Board {
 /// The edge from a lattice point one step towards `dir` is border, given
 /// the point's [`Board::cells_around`]: the two cells on the edge's sides
 /// differ in claimed-ness.
-fn is_border_edge(cells: [Cell; 4], dir: Dir) -> bool {
+fn sides_differ(cells: [Cell; 4], dir: Dir) -> bool {
     let (side, other_side) = edge_sides(cells, dir);
     side.is_claimed() != other_side.is_claimed()
 }
