@@ -4,7 +4,7 @@
 
 use qix_core::stix::legal_moves;
 use qix_core::tuning::SLOW_STEP_TICKS;
-use qix_core::{Board, Dir, DrawKind, Game, InputState, MarkerState, Stix};
+use qix_core::{Board, Dir, DrawKind, Game, InputState, MarkerState, Qix, Stix, Vec2};
 
 /// Dimensions of the board the runs play on: small, so that random stix
 /// reach the border before they wind themselves into a dead end.
@@ -32,6 +32,9 @@ const FAST_DRAW_PERCENT: u64 = 50;
 
 /// Stix a run must close for the invariants to have been put to the test.
 const MIN_CLOSES_PER_RUN: u32 = 20;
+
+/// Seed of the generator each game's Qix draws from.
+const QIX_SEED: u64 = 1194;
 
 /// The whole of a [`Rng::chance`].
 const PERCENT: u64 = 100;
@@ -162,9 +165,18 @@ fn play(game: &mut Game, step: Move, check: &impl Fn(&Before, &Game)) -> bool {
     panic!("legal move {step:?} from {from:?} did not step");
 }
 
+/// A game on a fresh `W x H` board, with a Qix one unit long at its
+/// centre.
+fn new_game() -> Game {
+    let centre = Vec2::new(f32::from(W), f32::from(H)) * 0.5;
+    let half = Vec2::new(0.5, 0.0);
+    let qix = Qix::new(centre - half, centre + half, Vec2::default(), 0.0);
+    Game::with_board(Board::new(W, H), qix, qix_core::Rng::new(QIX_SEED))
+}
+
 /// Plays one game of random legal moves and returns the stix it closed.
 fn play_game(rng: &mut Rng, check: &impl Fn(&Before, &Game)) -> u32 {
-    let mut game = Game::with_board(Board::new(W, H));
+    let mut game = new_game();
     let mut closes = 0;
     for _ in 0..MOVES_PER_GAME {
         let Some(step) = random_move(&game, rng) else {

@@ -1,19 +1,40 @@
 //! The eframe application: samples input, runs the core ticks each frame
 //! owes, and paints the playfield.
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use eframe::egui;
-use qix_core::Game;
+use qix_core::{Game, Rng};
 
 use crate::input::{self, InputLatch};
 use crate::playfield;
 use crate::timestep::FixedTimestep;
 
 /// The application state kept between frames.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct QixApp {
     game: Game,
     timestep: FixedTimestep,
     input: InputLatch,
+}
+
+impl Default for QixApp {
+    /// A new game seeded from the clock, so each run plays differently.
+    fn default() -> Self {
+        Self {
+            game: Game::new(Rng::new(clock_seed())),
+            timestep: FixedTimestep::default(),
+            input: InputLatch::default(),
+        }
+    }
+}
+
+/// The nanoseconds since the Unix epoch, folded into 64 bits; zero on a
+/// clock set before it.
+fn clock_seed() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos() as u64)
 }
 
 impl QixApp {

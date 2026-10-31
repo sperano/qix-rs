@@ -1,4 +1,4 @@
-use crate::{Dir, Point};
+use crate::{Dir, Point, Vec2, segments_intersect};
 
 #[test]
 fn opposite_pairs_the_directions() {
@@ -62,4 +62,93 @@ fn between_has_no_direction_for_the_same_point_or_a_diagonal() {
 
     assert_eq!(Dir::between(from, from), None);
     assert_eq!(Dir::between(from, Point::new(4, 4)), None);
+}
+
+fn v(x: f32, y: f32) -> Vec2 {
+    Vec2::new(x, y)
+}
+
+#[test]
+fn crossing_segments_intersect() {
+    assert!(segments_intersect(
+        v(0.0, 0.0),
+        v(2.0, 2.0),
+        v(0.0, 2.0),
+        v(2.0, 0.0)
+    ));
+    assert!(segments_intersect(
+        v(1.0, 0.0),
+        v(1.0, 4.0),
+        v(0.0, 2.0),
+        v(3.0, 2.0)
+    ));
+}
+
+#[test]
+fn segments_touching_at_an_end_intersect() {
+    assert!(segments_intersect(
+        v(0.0, 0.0),
+        v(1.0, 1.0),
+        v(1.0, 1.0),
+        v(2.0, 0.0)
+    ));
+    assert!(segments_intersect(
+        v(1.0, 0.0),
+        v(1.0, 2.0),
+        v(0.0, 2.0),
+        v(3.0, 2.0)
+    ));
+}
+
+#[test]
+fn overlapping_collinear_segments_intersect() {
+    assert!(segments_intersect(
+        v(0.0, 1.0),
+        v(3.0, 1.0),
+        v(2.0, 1.0),
+        v(5.0, 1.0)
+    ));
+}
+
+#[test]
+fn parallel_segments_do_not_intersect() {
+    assert!(!segments_intersect(
+        v(0.0, 0.0),
+        v(3.0, 0.0),
+        v(0.0, 1.0),
+        v(3.0, 1.0)
+    ));
+}
+
+#[test]
+fn disjoint_collinear_segments_do_not_intersect() {
+    assert!(!segments_intersect(
+        v(0.0, 1.0),
+        v(1.0, 1.0),
+        v(2.0, 1.0),
+        v(3.0, 1.0)
+    ));
+}
+
+#[test]
+fn segments_whose_lines_cross_elsewhere_do_not_intersect() {
+    assert!(!segments_intersect(
+        v(0.0, 0.0),
+        v(1.0, 1.0),
+        v(3.0, 0.0),
+        v(2.0, 1.0)
+    ));
+    assert!(!segments_intersect(
+        v(1.0, 0.0),
+        v(1.0, 1.5),
+        v(0.0, 2.0),
+        v(3.0, 2.0)
+    ));
+}
+
+#[test]
+fn intersecting_is_symmetric() {
+    let (a, b, c, d) = (v(0.0, 0.0), v(2.0, 2.0), v(0.0, 2.0), v(2.0, 0.0));
+    assert!(segments_intersect(c, d, a, b));
+    assert!(segments_intersect(b, a, d, c));
 }

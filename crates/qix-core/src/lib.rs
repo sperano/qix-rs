@@ -8,6 +8,8 @@ pub mod bitset;
 pub mod board;
 mod border;
 pub mod claim;
+pub mod collision;
+pub mod event;
 pub mod game;
 pub mod geometry;
 pub mod input;
@@ -27,6 +29,8 @@ mod board_test;
 mod border_test;
 #[cfg(test)]
 mod claim_test;
+#[cfg(test)]
+mod collision_test;
 #[cfg(test)]
 mod game_test;
 #[cfg(test)]
@@ -49,8 +53,9 @@ mod vec2_test;
 pub use bitset::BitSet;
 pub use board::{Board, Cell, DrawKind};
 pub use claim::ClaimResult;
+pub use event::{DeathCause, Event};
 pub use game::Game;
-pub use geometry::{Dir, Point};
+pub use geometry::{Dir, Point, segments_intersect};
 pub use input::InputState;
 pub use marker::{Marker, MarkerState};
 pub use qix::Qix;

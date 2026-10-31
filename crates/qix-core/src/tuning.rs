@@ -39,3 +39,7 @@ pub const QIX_SPIN_JITTER: f32 = 0.005;
 
 /// Segments in the Qix's trail, its current one included: one per tick.
 pub const QIX_TRAIL_LEN: usize = 32;
+
+/// Half the side of the square around a drawing marker that the Qix kills
+/// it in, in playfield units.
+pub const MARKER_HIT_HALF_SIZE: f32 = 0.5;

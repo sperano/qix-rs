@@ -104,7 +104,7 @@ impl Stix {
     }
 
     /// The segments, as their two ends, from the start to the head.
-    fn segments(&self) -> impl Iterator<Item = (Point, Point)> + '_ {
+    pub fn segments(&self) -> impl Iterator<Item = (Point, Point)> + '_ {
         self.points.windows(2).map(|pair| (pair[0], pair[1]))
     }
 }

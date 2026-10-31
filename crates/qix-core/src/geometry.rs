@@ -2,6 +2,8 @@
 
 use std::cmp::Ordering;
 
+use crate::vec2::Vec2;
+
 /// A corner of a cell: a point of the `(W+1) x (H+1)` lattice the marker,
 /// the stix and the Sparx move on.
 ///
@@ -69,4 +71,39 @@ impl Dir {
             _ => None,
         }
     }
+}
+
+/// The closed segments from `a` to `b` and from `c` to `d` share a point:
+/// they cross, or one touches the other with an end, or they overlap on a
+/// line.
+pub fn segments_intersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2) -> bool {
+    let (side_a, side_b) = (orientation(c, d, a), orientation(c, d, b));
+    let (side_c, side_d) = (orientation(a, b, c), orientation(a, b, d));
+    if opposite_signs(side_a, side_b) && opposite_signs(side_c, side_d) {
+        return true;
+    }
+    (side_a == 0.0 && in_box(c, d, a))
+        || (side_b == 0.0 && in_box(c, d, b))
+        || (side_c == 0.0 && in_box(a, b, c))
+        || (side_d == 0.0 && in_box(a, b, d))
+}
+
+/// Which side of the line from `from` to `to` `point` lies on: the sign of
+/// the cross product, zero on the line.
+fn orientation(from: Vec2, to: Vec2, point: Vec2) -> f32 {
+    (to - from).cross(point - from)
+}
+
+/// One of `p` and `q` is positive and the other negative.
+fn opposite_signs(p: f32, q: f32) -> bool {
+    (p > 0.0 && q < 0.0) || (p < 0.0 && q > 0.0)
+}
+
+/// `point` lies in the bounding box of `a` and `b`, edges included: on the
+/// segment, for a point already known to be on its line.
+fn in_box(a: Vec2, b: Vec2, point: Vec2) -> bool {
+    a.x.min(b.x) <= point.x
+        && point.x <= a.x.max(b.x)
+        && a.y.min(b.y) <= point.y
+        && point.y <= a.y.max(b.y)
 }

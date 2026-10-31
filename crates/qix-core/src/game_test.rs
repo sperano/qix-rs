@@ -1,5 +1,10 @@
 use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS, SLOW_STEP_TICKS};
-use crate::{Board, Cell, Dir, DrawKind, Game, InputState, MarkerState, Point};
+use crate::{Board, Cell, Dir, DrawKind, Game, InputState, MarkerState, Point, Qix, Rng, Vec2};
+
+mod qix_hits;
+
+/// Seed of every game the tests play.
+const SEED: u64 = 1194;
 
 /// Dimensions of the small board the lap and corner tests use.
 const W: u16 = 4;
@@ -10,6 +15,23 @@ const STEPS: u32 = 5;
 
 /// Lattice steps that take the marker past any edge of the full board.
 const BEYOND_ANY_EDGE: u32 = BOARD_W as u32 + 1;
+
+/// A new full-size game.
+fn new_game() -> Game {
+    Game::new(Rng::new(SEED))
+}
+
+/// A game on `board` with a short Qix in its top-left cell, which must be
+/// free.
+fn small_game(board: Board) -> Game {
+    let qix = Qix::new(
+        Vec2::new(0.25, 0.5),
+        Vec2::new(0.75, 0.5),
+        Vec2::default(),
+        0.0,
+    );
+    Game::with_board(board, qix, Rng::new(SEED))
+}
 
 fn holding(dir: Dir) -> InputState {
     InputState {
@@ -55,12 +77,12 @@ fn walk(game: &mut Game, dir: Dir, steps: u32) {
 
 #[test]
 fn new_game_has_not_ticked() {
-    assert_eq!(Game::new().ticks(), 0);
+    assert_eq!(new_game().ticks(), 0);
 }
 
 #[test]
 fn each_tick_advances_one_step() {
-    let mut game = Game::new();
+    let mut game = new_game();
 
     game.tick(&holding(Dir::Left));
     game.tick(&InputState::default());
@@ -70,7 +92,7 @@ fn each_tick_advances_one_step() {
 
 #[test]
 fn new_game_has_a_free_board_and_the_marker_at_the_bottom_centre() {
-    let game = Game::new();
+    let game = new_game();
 
     assert_eq!(game.board(), &Board::new(BOARD_W, BOARD_H));
     assert_eq!(game.marker().pos, Point::new(BOARD_W / 2, BOARD_H));
@@ -79,7 +101,7 @@ fn new_game_has_a_free_board_and_the_marker_at_the_bottom_centre() {
 
 #[test]
 fn marker_moves_exactly_one_step_per_marker_step_ticks() {
-    let mut game = Game::new();
+    let mut game = new_game();
     let start = game.marker().pos;
 
     for tick in 1..=STEPS * MARKER_STEP_TICKS {
@@ -91,7 +113,7 @@ fn marker_moves_exactly_one_step_per_marker_step_ticks() {
 
 #[test]
 fn marker_stays_put_without_a_direction() {
-    let mut game = Game::new();
+    let mut game = new_game();
     let start = game.marker().pos;
 
     hold(&mut game, InputState::default(), STEPS * MARKER_STEP_TICKS);
@@ -101,7 +123,7 @@ fn marker_stays_put_without_a_direction() {
 
 #[test]
 fn releasing_the_direction_restarts_the_step_count() {
-    let mut game = Game::new();
+    let mut game = new_game();
     let start = game.marker().pos;
 
     hold(&mut game, holding(Dir::Right), MARKER_STEP_TICKS - 1);
@@ -113,7 +135,7 @@ fn releasing_the_direction_restarts_the_step_count() {
 
 #[test]
 fn marker_cannot_leave_the_border_without_a_draw_button() {
-    let mut game = Game::new();
+    let mut game = new_game();
     let ticks = BEYOND_ANY_EDGE * MARKER_STEP_TICKS;
 
     for dir in [Dir::Up, Dir::Left, Dir::Up, Dir::Right, Dir::Down] {
@@ -126,7 +148,7 @@ fn marker_cannot_leave_the_border_without_a_draw_button() {
 
 #[test]
 fn marker_stops_at_the_edge_it_walks_along() {
-    let mut game = Game::new();
+    let mut game = new_game();
 
     walk(&mut game, Dir::Right, BEYOND_ANY_EDGE);
 
@@ -135,7 +157,7 @@ fn marker_stops_at_the_edge_it_walks_along() {
 
 #[test]
 fn marker_follows_the_border_with_a_draw_button_held() {
-    let mut game = Game::new();
+    let mut game = new_game();
     let start = game.marker().pos;
     let input = InputState {
         fast: true,
@@ -150,7 +172,7 @@ fn marker_follows_the_border_with_a_draw_button_held() {
 
 #[test]
 fn marker_turns_every_outer_corner_on_a_lap() {
-    let mut game = Game::with_board(Board::new(W, H));
+    let mut game = small_game(Board::new(W, H));
     let start = game.marker().pos;
     let (w, h) = (u32::from(W), u32::from(H));
     let half = u32::from(W / 2);
@@ -172,7 +194,7 @@ fn marker_turns_every_outer_corner_on_a_lap() {
 fn marker_turns_the_corners_around_a_claimed_cell() {
     let mut board = Board::new(W, H);
     board.set_cell(W - 1, H - 1, Cell::Claimed(DrawKind::Fast));
-    let mut game = Game::with_board(board);
+    let mut game = small_game(board);
     let path = [
         (Dir::Right, Point::new(W - 1, H)),
         (Dir::Right, Point::new(W - 1, H)),
@@ -190,7 +212,7 @@ fn marker_turns_the_corners_around_a_claimed_cell() {
 
 #[test]
 fn a_draw_button_and_a_move_into_free_space_start_a_stix() {
-    let mut game = Game::with_board(Board::new(W, H));
+    let mut game = small_game(Board::new(W, H));
     let start = game.marker().pos;
 
     draw(&mut game, Dir::Up, DrawKind::Fast, 1);
@@ -206,7 +228,7 @@ fn a_draw_button_and_a_move_into_free_space_start_a_stix() {
 #[test]
 fn each_draw_button_steps_at_its_speed() {
     for kind in [DrawKind::Fast, DrawKind::Slow] {
-        let mut game = Game::new();
+        let mut game = new_game();
         let start = game.marker().pos;
         let step_ticks = draw_step_ticks(kind);
 
@@ -224,7 +246,7 @@ fn each_draw_button_steps_at_its_speed() {
 
 #[test]
 fn the_slow_button_follows_the_border_at_marker_speed() {
-    let mut game = Game::new();
+    let mut game = new_game();
     let start = game.marker().pos;
 
     hold(
@@ -240,7 +262,7 @@ fn the_slow_button_follows_the_border_at_marker_speed() {
 
 #[test]
 fn releasing_both_draw_buttons_stops_the_marker_on_the_stix() {
-    let mut game = Game::new();
+    let mut game = new_game();
     draw(&mut game, Dir::Up, DrawKind::Fast, 1);
     let head = game.marker().pos;
 
@@ -253,7 +275,7 @@ fn releasing_both_draw_buttons_stops_the_marker_on_the_stix() {
 
 #[test]
 fn pressing_a_draw_button_again_resumes_drawing() {
-    let mut game = Game::new();
+    let mut game = new_game();
     draw(&mut game, Dir::Up, DrawKind::Fast, 1);
     let head = game.marker().pos;
     hold(
@@ -280,7 +302,7 @@ fn pressing_a_draw_button_again_resumes_drawing() {
 
 #[test]
 fn a_single_fast_segment_makes_the_claim_fast() {
-    let mut game = Game::new();
+    let mut game = new_game();
 
     draw(&mut game, Dir::Up, DrawKind::Slow, 2);
     draw(&mut game, Dir::Left, DrawKind::Fast, 1);
@@ -296,7 +318,7 @@ fn a_single_fast_segment_makes_the_claim_fast() {
 
 #[test]
 fn a_stix_drawn_slow_throughout_claims_slow() {
-    let mut game = Game::new();
+    let mut game = new_game();
 
     draw(&mut game, Dir::Up, DrawKind::Slow, 2);
     draw(&mut game, Dir::Right, DrawKind::Slow, 1);
@@ -306,7 +328,7 @@ fn a_stix_drawn_slow_throughout_claims_slow() {
 
 #[test]
 fn an_illegal_draw_step_leaves_the_marker_drawing_where_it_is() {
-    let mut game = Game::new();
+    let mut game = new_game();
     draw(&mut game, Dir::Up, DrawKind::Fast, 2);
     let stix = game.stix().unwrap().clone();
 
@@ -319,7 +341,7 @@ fn an_illegal_draw_step_leaves_the_marker_drawing_where_it_is() {
 
 #[test]
 fn a_draw_step_off_the_board_starts_no_stix() {
-    let mut game = Game::new();
+    let mut game = new_game();
     let start = game.marker().pos;
 
     draw(&mut game, Dir::Down, DrawKind::Fast, 1);
@@ -331,7 +353,7 @@ fn a_draw_step_off_the_board_starts_no_stix() {
 
 #[test]
 fn reaching_the_border_closes_the_stix() {
-    let mut game = Game::with_board(Board::new(W, H));
+    let mut game = small_game(Board::new(W, H));
     let start = game.marker().pos;
 
     draw(&mut game, Dir::Up, DrawKind::Fast, u32::from(H));
@@ -354,7 +376,7 @@ fn claimed_cells(board: &Board) -> Vec<(u16, u16)> {
 
 #[test]
 fn closing_a_stix_claims_the_side_without_the_centre_cell() {
-    let mut game = Game::with_board(Board::new(W, H));
+    let mut game = small_game(Board::new(W, H));
     let cut_x = game.marker().pos.x;
 
     draw(&mut game, Dir::Up, DrawKind::Slow, u32::from(H));
@@ -379,7 +401,7 @@ fn closing_a_stix_claims_the_side_without_the_centre_cell() {
 /// marker's start, then left to the left edge, which closes it and claims
 /// the cells below it. Returns the game and the stix's lattice points.
 fn closed_l() -> (Game, Vec<Point>) {
-    let mut game = Game::with_board(Board::new(W, H));
+    let mut game = small_game(Board::new(W, H));
     let start = game.marker().pos;
     draw(&mut game, Dir::Up, DrawKind::Fast, 1);
     draw(&mut game, Dir::Left, DrawKind::Fast, u32::from(start.x));
