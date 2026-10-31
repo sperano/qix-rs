@@ -2,8 +2,8 @@
 //! free.
 
 use super::{SEED, draw, penned, walk};
-use crate::tuning::{POINTS_PER_CELL, SLOW_DRAW_FACTOR, STARTING_MULTIPLIER};
-use crate::{Board, Dir, DrawKind, Game, Qix, Rng};
+use crate::tuning::{POINTS_PER_CELL, SLOW_DRAW_FACTOR, STARTING_LIVES, STARTING_MULTIPLIER};
+use crate::{Board, Dir, DrawKind, Game, Point, Qix, Rng};
 
 /// Dimensions of the boards: the marker starts at `(W / 2, H)`, and the
 /// stix runs straight along column `W / 2` from one edge to the other.
@@ -197,6 +197,9 @@ fn a_stix_between_two_qix_claims_nothing() {
 
         close_from_bottom(&mut game);
 
+        let top = Point::new(W / 2, 0);
+        assert_eq!(game.marker().pos, top, "{left_first}: marker died");
+        assert_eq!(game.lives(), STARTING_LIVES, "{left_first}");
         assert_eq!(game.stix(), None, "{left_first}");
         assert_eq!(game.board(), &board, "{left_first}");
         assert_eq!(game.score().points(), 0, "{left_first}");

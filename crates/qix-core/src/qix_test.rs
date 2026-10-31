@@ -23,6 +23,10 @@ const MIN_TICKS_BESIDE_EACH_CLAIM: u32 = 10;
 /// A speed range entirely above [`QIX_SPEED`], as a later level's.
 const FAST_SPEED: RangeInclusive<f32> = 0.9..=1.0;
 
+/// Ticks of the [`Qix::previous`] test: past the second, the segment one
+/// tick ago is no longer the oldest of the trail.
+const PREVIOUS_TICKS: usize = 3;
+
 /// Where on the middle row the spawn test centres its Qix.
 const SPAWN_X: f32 = 40.0;
 
@@ -303,12 +307,16 @@ fn a_spawned_qix_keeps_within_its_speed_range() {
 
 #[test]
 fn the_previous_segment_is_the_one_before_the_last_tick() {
+    let board = Board::new(BOARD_W, BOARD_H);
+    let mut rng = Rng::new(SEED);
     let mut qix = qix_at((1, 1));
-    let start = (qix.a(), qix.b());
-    assert_eq!(qix.previous(), start, "before any tick");
+    let mut segments = vec![(qix.a(), qix.b())];
+    assert_eq!(qix.previous(), segments[0], "before any tick");
 
-    qix.tick(&Board::new(BOARD_W, BOARD_H), &mut Rng::new(SEED));
-
-    assert_eq!(qix.previous(), start);
-    assert_ne!((qix.a(), qix.b()), start);
+    for tick in 0..PREVIOUS_TICKS {
+        qix.tick(&board, &mut rng);
+        segments.push((qix.a(), qix.b()));
+        assert_ne!(segments[tick + 1], segments[tick], "tick {tick}: still");
+        assert_eq!(qix.previous(), segments[tick], "tick {tick}");
+    }
 }
