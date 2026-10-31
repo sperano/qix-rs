@@ -8,6 +8,7 @@ use qix_core::tuning::SLOW_DRAW_FACTOR;
 use qix_core::{Game, GameState, Session};
 
 use crate::input::{CONFIRM_KEY, DIR_KEYS, FAST_KEY, OVERLAY_KEY, PAUSE_KEY, SLOW_KEY};
+use crate::numbers::thousands;
 use crate::palette;
 
 /// Size of a screen's heading, in points.
@@ -88,7 +89,7 @@ pub fn level_complete(game: &Game, fraction: f32, bonus: u32, split: bool) -> Sc
     }
     lines.extend([
         format!("Claimed {:.1}%", fraction * PERCENT),
-        format!("Bonus {bonus}"),
+        format!("Bonus {}", thousands(bonus)),
         format!("Multiplier x{}", game.multiplier()),
         String::new(),
         format!(
@@ -108,7 +109,7 @@ pub fn game_over(game: &Game) -> Screen {
     Screen {
         heading: "GAME OVER".to_owned(),
         lines: vec![
-            format!("Final score {}", game.score().points()),
+            format!("Final score {}", thousands(game.score().points())),
             String::new(),
             format!("Press {} to continue", CONFIRM_KEY.name()),
         ],

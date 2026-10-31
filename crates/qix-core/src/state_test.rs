@@ -385,3 +385,36 @@ fn confirm_after_game_over_shows_the_title_with_a_new_game() {
     assert_eq!(game.ticks(), 0);
     assert_eq!(game.level(), FIRST_LEVEL);
 }
+
+#[test]
+fn a_new_session_has_no_high_score() {
+    assert_eq!(Session::new(level_game()).high_score(), 0);
+}
+
+#[test]
+fn the_high_score_follows_the_score_of_the_game_played() {
+    let session = completed_level();
+
+    let points = session.game().score().points();
+    assert!(points > 0, "the level scored nothing");
+    assert_eq!(session.high_score(), points);
+}
+
+#[test]
+fn the_high_score_outlives_the_game_that_set_it() {
+    let mut session = completed_level();
+    let best = session.high_score();
+    session.tick(&CONFIRM);
+    for _ in 0..MAX_GAME_TICKS {
+        if session.state() == GameState::GameOver {
+            break;
+        }
+        session.tick(&InputState::default());
+    }
+    assert_eq!(session.state(), GameState::GameOver);
+
+    session.tick(&CONFIRM);
+
+    assert_eq!(session.game().score().points(), 0);
+    assert_eq!(session.high_score(), best);
+}

@@ -230,7 +230,7 @@ fn a_completed_level_shows_the_claim_the_bonus_and_the_multiplier() {
             heading: "LEVEL 1 COMPLETE".to_owned(),
             lines: vec![
                 "Claimed 81.2%".to_owned(),
-                "Bonus 6000".to_owned(),
+                "Bonus 6,000".to_owned(),
                 "Multiplier x3".to_owned(),
                 String::new(),
                 "Press Enter for level 2".to_owned(),
@@ -267,7 +267,7 @@ fn a_completed_level_shows_its_claim_and_bonus() {
     let (shown, expected) = level_screens(&session);
     assert_eq!(shown, Some(expected));
     let lines = shown.unwrap().lines;
-    assert_eq!(lines[..2], ["Claimed 75.0%", "Bonus 25000"]);
+    assert_eq!(lines[..2], ["Claimed 75.0%", "Bonus 25,000"]);
 }
 
 #[test]

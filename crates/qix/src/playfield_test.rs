@@ -4,7 +4,8 @@ use qix_core::tuning::{BOARD_H, BOARD_W};
 use qix_core::{Board, Cell, Dir, DrawKind, Game, InputState, Qix, Rng};
 
 use crate::palette;
-use crate::playfield::{letterbox, playfield_units, show, to_screen};
+use crate::playfield::{hud_units, letterbox, playfield_units, show, to_screen, window_units};
+use crate::render::hud::{self, Hud};
 use crate::render::screen::{Screen, paused, title};
 
 /// Seed of every game the tests play.
@@ -12,6 +13,9 @@ const SEED: u64 = 1;
 
 /// Tolerance for comparing screen coordinates, in points.
 const EPSILON: f32 = 1e-3;
+
+/// Size of the window area the painting tests run in.
+const PAINTED_AREA: Vec2 = vec2(800.0, 600.0);
 
 /// Window areas to fit the playfield into: wide, tall, exact and tiny.
 const AREAS: [Vec2; 5] = [
@@ -22,8 +26,9 @@ const AREAS: [Vec2; 5] = [
     vec2(1.0, 1.0),
 ];
 
+/// The aspect ratio of the playfield with the HUD above it.
 fn aspect() -> f32 {
-    f32::from(BOARD_W) / f32::from(BOARD_H)
+    f32::from(BOARD_W) / (f32::from(BOARD_H) + hud::HEIGHT)
 }
 
 fn assert_near(actual: Pos2, expected: Pos2) {
@@ -61,9 +66,21 @@ fn the_playfield_fills_one_axis_and_stays_centred_inside() {
 
 #[test]
 fn a_wide_window_letterboxes_left_and_right() {
-    let field = letterbox(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 600.0)));
-    assert_near(field.min, pos2(400.0, 0.0));
-    assert_near(field.max, pos2(1200.0, 600.0));
+    let (width, height) = (1600.0, 600.0);
+    let field = letterbox(Rect::from_min_size(Pos2::ZERO, vec2(width, height)));
+    let margin = (width - height * aspect()) / 2.0;
+    assert_near(field.min, pos2(margin, 0.0));
+    assert_near(field.max, pos2(width - margin, height));
+}
+
+#[test]
+fn the_hud_sits_above_the_playfield_as_wide_as_it() {
+    let hud = hud_units();
+    let field = playfield_units();
+    assert_eq!(hud.left_bottom(), field.left_top());
+    assert_eq!(hud.right_bottom(), field.right_top());
+    assert_eq!(hud.height(), hud::HEIGHT);
+    assert_eq!(window_units(), hud.union(field));
 }
 
 #[test]
@@ -73,29 +90,46 @@ fn an_empty_area_gives_an_empty_playfield() {
 }
 
 #[test]
-fn playfield_corners_map_to_the_letterbox_corners() {
+fn the_hud_and_playfield_corners_map_to_the_letterbox_corners() {
     let available = area(vec2(1000.0, 500.0));
     let transform = to_screen(available);
-    let units = playfield_units();
-    let field = letterbox(available);
-    assert_near(transform.transform_pos(units.min), field.min);
-    assert_near(transform.transform_pos(units.max), field.max);
+    let letterboxed = letterbox(available);
+    let hud = transform.transform_rect(hud_units());
+    let field = transform.transform_rect(playfield_units());
+    assert_near(hud.min, letterboxed.min);
+    assert_near(field.max, letterboxed.max);
+    assert_near(hud.left_bottom(), field.left_top());
+}
+
+/// The HUD's strip on screen in the painting tests.
+fn hud_strip() -> Rect {
+    to_screen(area(PAINTED_AREA)).transform_rect(hud_units())
 }
 
 /// Runs one headless egui frame showing `game`'s playfield and returns
-/// the shapes it painted, after checking that they tessellate.
+/// the shapes it painted outside the HUD, after checking that they
+/// tessellate.
 fn painted(game: &Game, overlay: bool) -> Vec<Shape> {
     painted_with(game, None, overlay)
 }
 
 /// [`painted`] with `screen` over the playfield.
 fn painted_with(game: &Game, screen: Option<&Screen>, overlay: bool) -> Vec<Shape> {
+    let strip = hud_strip();
+    let shapes = painted_all(game, &hud::hud(game, 0), screen, overlay);
+    let in_hud = |shape: &Shape| strip.contains_rect(shape.visual_bounding_rect());
+    shapes.into_iter().filter(|shape| !in_hud(shape)).collect()
+}
+
+/// Every shape of one headless egui frame showing `game`'s playfield with
+/// `hud` and `screen`, after checking that they tessellate.
+fn painted_all(game: &Game, hud: &Hud, screen: Option<&Screen>, overlay: bool) -> Vec<Shape> {
     let ctx = egui::Context::default();
     let input = egui::RawInput {
-        screen_rect: Some(area(vec2(800.0, 600.0))),
+        screen_rect: Some(area(PAINTED_AREA)),
         ..egui::RawInput::default()
     };
-    let mut output = ctx.run_ui(input, |ui| show(ui, game, screen, overlay));
+    let mut output = ctx.run_ui(input, |ui| show(ui, game, hud, screen, overlay));
     // No renderer uploads the font atlas here; dropping it unapplied panics.
     output.textures_delta.clear();
     let shapes = output.shapes.iter().map(|clipped| clipped.shape.clone());
@@ -179,4 +213,24 @@ fn a_stix_being_drawn_is_painted_as_a_line() {
         count(&shapes, |s| matches!(s, Shape::Path(p) if !p.closed)),
         1
     );
+}
+
+#[test]
+fn the_hud_is_painted_in_its_strip() {
+    let game = Game::new(Rng::new(SEED));
+    let strip = hud_strip();
+    let shapes = painted_all(&game, &hud::hud(&game, 0), None, false);
+    let in_hud = |shape: &&Shape| strip.contains_rect(shape.visual_bounding_rect());
+    let texts = shapes
+        .iter()
+        .filter(in_hud)
+        .filter(|s| matches!(s, Shape::Text(_)));
+    let texts: Vec<_> = texts
+        .filter_map(|shape| match shape {
+            Shape::Text(text) => Some(text.galley.text().to_owned()),
+            _ => None,
+        })
+        .collect();
+    assert!(texts.contains(&"SCORE".to_owned()), "{texts:?}");
+    assert!(texts.contains(&"0.0% / 75%".to_owned()), "{texts:?}");
 }

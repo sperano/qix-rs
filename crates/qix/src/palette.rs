@@ -1,7 +1,7 @@
 //! The colours the game is painted with.
 
 use eframe::egui::Color32;
-use qix_core::{DrawKind, SparxKind};
+use qix_core::{DrawKind, MeterExpiry, SparxKind};
 
 /// Around the letterboxed playfield.
 pub const WINDOW_BACKGROUND: Color32 = Color32::BLACK;
@@ -70,6 +70,18 @@ pub const SCREEN_HEADING: Color32 = MARKER;
 /// The lines under a screen's heading.
 pub const SCREEN_TEXT: Color32 = Color32::WHITE;
 
+/// The names of the HUD's fields.
+pub const HUD_LABEL: Color32 = Color32::from_gray(150);
+
+/// The values of the HUD's fields.
+pub const HUD_VALUE: Color32 = Color32::WHITE;
+
+/// The lives left, in the HUD: the marker they stand for.
+pub const HUD_LIFE: Color32 = MARKER;
+
+/// The outline of the Sparx meter's bar.
+pub const HUD_METER_FRAME: Color32 = Color32::from_gray(150);
+
 /// The fill of cells claimed with `kind`.
 pub const fn fill(kind: DrawKind) -> Color32 {
     match kind {
@@ -83,6 +95,16 @@ pub const fn stix(kind: DrawKind) -> Color32 {
     match kind {
         DrawKind::Fast => FAST_STIX,
         DrawKind::Slow => SLOW_STIX,
+    }
+}
+
+/// The fill of the Sparx meter's bar counting down to `expiry`: the
+/// colour of the Sparx it releases, then of the Super Sparx they turn
+/// into.
+pub const fn meter(expiry: MeterExpiry) -> Color32 {
+    match expiry {
+        MeterExpiry::Release => SPARX,
+        MeterExpiry::Super => SUPER_SPARX,
     }
 }
 
