@@ -324,10 +324,10 @@ impl Game {
     /// marker where it is.
     ///
     /// A step onto a border point closes the stix: the area it cuts off
-    /// from the Qix is claimed and scored, the stix is dropped, the marker
-    /// is back on the border, at the closing point, and a Sparx the claim
-    /// took off the border snaps back to it. A claim taking the board to
-    /// the threshold completes the level.
+    /// from the Qix is claimed and scored, the stix is dropped and its fuse
+    /// put out, the marker is back on the border, at the closing point, and
+    /// a Sparx the claim took off the border snaps back to it. A claim
+    /// taking the board to the threshold completes the level.
     fn draw(&mut self, dir: Dir, kind: DrawKind) {
         let mut stix = self
             .stix
@@ -348,6 +348,7 @@ impl Game {
                 self.check_level_complete(claim.fraction);
             }
             self.marker.state = MarkerState::OnBorder;
+            self.fuse.put_out();
             for sparx in &mut self.sparx {
                 sparx.snap_to_border(&self.board);
             }

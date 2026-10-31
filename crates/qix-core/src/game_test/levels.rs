@@ -1,10 +1,16 @@
 //! Completing a level through [`Game::tick`]: a claim reaching the claim
 //! threshold.
 
-use super::{SEED, draw, hold, holding};
+use super::{SEED, draw, drawing, hold, holding, penned};
 use crate::qix_test::qix_at;
-use crate::tuning::{BONUS_PER_PERCENT, CLAIM_THRESHOLD_DEFAULT, POINTS_PER_CELL};
-use crate::{Board, Cell, ClaimThreshold, Dir, DrawKind, Event, Game, Rng};
+use crate::tuning::{
+    BONUS_PER_PERCENT, CLAIM_THRESHOLD_DEFAULT, CLAIM_THRESHOLD_RANGE, FUSE_DELAY_TICKS,
+    MARKER_STEP_TICKS, POINTS_PER_CELL,
+};
+use crate::{
+    Board, Cell, ClaimThreshold, Dir, DrawKind, Event, Game, InputState, Point, Rng, Sparx,
+    SparxKind,
+};
 
 /// Dimensions of the board: the stix runs up column `W / 2` from the
 /// marker's start, leaving the Qix in cell `(0, 0)` on its left.
@@ -28,14 +34,40 @@ const FRACTION_AFTER: f32 = 0.75;
 const LOW_THRESHOLD: f32 = 0.5;
 const PERCENT_ABOVE_LOW: u32 = 25;
 
+/// Height of the board of [`the_completing_claim_puts_the_fuse_out`]:
+/// tall enough for [`penned`] to keep its Qix in the left column, out of
+/// reach of the stix while the fuse lights. Closing the stix claims more
+/// than the lowest threshold of it.
+const FUSE_H: u16 = 6;
+
+/// Where the Sparx of [`game_with_sparx`] starts: on the top edge, left of
+/// the stix, on a border the claim keeps.
+const SPARX_START: Point = Point::new(1, 0);
+
 /// A game on the `W x H` board with the first `claimed` cells of
-/// [`CLAIMED_BEFORE`] claimed and the Qix in cell `(0, 0)`.
-fn game_with_claimed(claimed: usize) -> Game {
+/// [`CLAIMED_BEFORE`] claimed, the Qix in cell `(0, 0)` and `sparx`.
+fn game_with(claimed: usize, sparx: Vec<Sparx>) -> Game {
     let mut board = Board::new(W, H);
     for &(x, y) in &CLAIMED_BEFORE[..claimed] {
         board.set_cell(x, y, Cell::Claimed(DrawKind::Fast));
     }
-    Game::with_board(board, qix_at((0, 0)), Vec::new(), Rng::new(SEED))
+    Game::with_board(board, qix_at((0, 0)), sparx, Rng::new(SEED))
+}
+
+/// A [`game_with`] no Sparx.
+fn game_with_claimed(claimed: usize) -> Game {
+    game_with(claimed, Vec::new())
+}
+
+/// A [`game_with`] every cell of [`CLAIMED_BEFORE`] claimed and a Sparx at
+/// [`SPARX_START`] heading right along the top edge.
+fn game_with_sparx() -> Game {
+    let sparx = Sparx {
+        pos: SPARX_START,
+        dir: Dir::Right,
+        kind: SparxKind::Normal,
+    };
+    game_with(CLAIMED_BEFORE.len(), vec![sparx])
 }
 
 /// Draws the stix up from the marker's start to the top edge.
@@ -114,4 +146,56 @@ fn a_completed_level_no_longer_ticks() {
     assert_eq!(game.marker(), marker);
     assert_eq!(game.score(), score);
     assert_eq!(game.events(), []);
+}
+
+#[test]
+fn the_completing_claim_puts_the_fuse_out() {
+    let (board, qix) = penned(W, FUSE_H, 0);
+    let mut game = Game::with_board(board, qix, Vec::new(), Rng::new(SEED));
+    game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.start()));
+    draw(&mut game, Dir::Up, DrawKind::Fast, u32::from(FUSE_H) - 1);
+    hold(&mut game, InputState::default(), FUSE_DELAY_TICKS);
+    assert!(game.fuse().is_some(), "the fuse did not light");
+
+    draw(&mut game, Dir::Up, DrawKind::Fast, 1);
+
+    assert!(game.is_level_complete());
+    assert_eq!(game.stix(), None);
+    assert_eq!(game.fuse(), None);
+}
+
+#[test]
+fn nothing_moves_after_the_completing_claim_in_its_tick() {
+    let mut game = game_with_sparx();
+    let mut below = game_with_sparx();
+    below.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.end()));
+    let input = drawing(Dir::Up, DrawKind::Fast);
+    let ticks = u32::from(H) * MARKER_STEP_TICKS;
+    hold(&mut game, input, ticks - 1);
+    hold(&mut below, input, ticks - 1);
+    assert!(!game.is_level_complete(), "the level completed early");
+    let last = (game.qix().clone(), game.sparx().to_vec());
+
+    game.tick(&input);
+    below.tick(&input);
+
+    assert!(game.is_level_complete());
+    assert!(!below.is_level_complete());
+    assert_eq!(
+        game.events(),
+        [Event::LevelComplete {
+            fraction: FRACTION_AFTER
+        }]
+    );
+    assert_eq!((game.qix(), game.sparx()), (&last.0, &last.1[..]));
+    assert_ne!(
+        below.qix(),
+        &last.0,
+        "the Qix stands still below the threshold"
+    );
+    assert_ne!(
+        below.sparx(),
+        last.1,
+        "the Sparx stands still below the threshold"
+    );
 }
