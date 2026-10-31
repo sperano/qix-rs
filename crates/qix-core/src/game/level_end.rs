@@ -30,15 +30,21 @@ impl Game {
     pub(super) fn end_level_after(&mut self, close: &CloseResult) {
         let fraction = self.board.claimed_fraction();
         let split = splits(&close.regions);
-        if split {
+        let bonus = if split {
             self.multiplier = (self.multiplier + 1).min(MAX_MULTIPLIER);
+            0
         } else if close.claim.is_some() && self.threshold.is_reached(fraction) {
-            self.score.add(self.threshold.bonus(fraction));
+            self.threshold.bonus(fraction)
         } else {
             return;
-        }
+        };
+        self.score.add(bonus);
         self.level_complete = true;
-        self.events.push(Event::LevelComplete { fraction, split });
+        self.events.push(Event::LevelComplete {
+            fraction,
+            bonus,
+            split,
+        });
     }
 }
 

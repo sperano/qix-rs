@@ -15,6 +15,8 @@ pub enum Event {
     LevelComplete {
         /// The board's claimed fraction after the claim, from 0 to 1.
         fraction: f32,
+        /// The level bonus scored, zero after a split.
+        bonus: u32,
         /// The stix left the Qix in different free areas.
         split: bool,
     },

@@ -90,6 +90,7 @@ fn a_stix_splitting_the_qix_ends_the_level() {
         game.events(),
         [Event::LevelComplete {
             fraction: game.board().claimed_fraction(),
+            bonus: 0,
             split: true,
         }]
     );
@@ -149,6 +150,7 @@ fn a_split_claim_scores_at_the_old_multiplier_without_a_bonus() {
         game.events(),
         [Event::LevelComplete {
             fraction: POCKET_FRACTION,
+            bonus: 0,
             split: true,
         }]
     );

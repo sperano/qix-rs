@@ -97,6 +97,7 @@ fn a_claim_exactly_at_the_threshold_completes_the_level() {
         game.events(),
         [Event::LevelComplete {
             fraction: FRACTION_AFTER,
+            bonus: 0,
             split: false,
         }]
     );
@@ -119,6 +120,7 @@ fn a_threshold_completion_keeps_the_multiplier() {
         game.events(),
         [Event::LevelComplete {
             fraction: FRACTION_AFTER,
+            bonus: 0,
             split: false,
         }]
     );
@@ -150,6 +152,14 @@ fn the_bonus_scores_each_whole_percent_above_the_threshold() {
     let claim_points = STIX_CLAIM_CELLS * POINTS_PER_CELL;
     let bonus = PERCENT_ABOVE_LOW * BONUS_PER_PERCENT;
     assert_eq!(game.score().points(), claim_points + bonus);
+    assert_eq!(
+        game.events(),
+        [Event::LevelComplete {
+            fraction: FRACTION_AFTER,
+            bonus,
+            split: false,
+        }]
+    );
 }
 
 #[test]
@@ -203,6 +213,7 @@ fn nothing_moves_after_the_completing_claim_in_its_tick() {
         game.events(),
         [Event::LevelComplete {
             fraction: FRACTION_AFTER,
+            bonus: 0,
             split: false,
         }]
     );

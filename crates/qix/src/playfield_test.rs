@@ -5,6 +5,7 @@ use qix_core::{Board, Cell, Dir, DrawKind, Game, InputState, Qix, Rng};
 
 use crate::palette;
 use crate::playfield::{letterbox, playfield_units, show, to_screen};
+use crate::render::screen::{Screen, paused, title};
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1;
@@ -84,12 +85,17 @@ fn playfield_corners_map_to_the_letterbox_corners() {
 /// Runs one headless egui frame showing `game`'s playfield and returns
 /// the shapes it painted, after checking that they tessellate.
 fn painted(game: &Game, overlay: bool) -> Vec<Shape> {
+    painted_with(game, None, overlay)
+}
+
+/// [`painted`] with `screen` over the playfield.
+fn painted_with(game: &Game, screen: Option<&Screen>, overlay: bool) -> Vec<Shape> {
     let ctx = egui::Context::default();
     let input = egui::RawInput {
         screen_rect: Some(area(vec2(800.0, 600.0))),
         ..egui::RawInput::default()
     };
-    let mut output = ctx.run_ui(input, |ui| show(ui, game, overlay));
+    let mut output = ctx.run_ui(input, |ui| show(ui, game, screen, overlay));
     // No renderer uploads the font atlas here; dropping it unapplied panics.
     output.textures_delta.clear();
     let shapes = output.shapes.iter().map(|clipped| clipped.shape.clone());
@@ -129,6 +135,31 @@ fn the_playfield_paints_the_claimed_cells_border_and_marker() {
 fn the_overlay_adds_its_text() {
     let shapes = painted(&Game::new(Rng::new(SEED)), true);
     assert_eq!(count(&shapes, |s| matches!(s, Shape::Text(_))), 1);
+}
+
+#[test]
+fn a_screen_adds_its_heading_and_each_line_over_the_playfield() {
+    let game = Game::new(Rng::new(SEED));
+    let screen = title();
+    let shapes = painted_with(&game, Some(&screen), false);
+    let texts = count(&shapes, |s| matches!(s, Shape::Text(_)));
+    assert_eq!(texts, 1 + screen.lines.len());
+    let field = painted(&game, false);
+    assert_eq!(
+        shapes[..field.len()],
+        field[..],
+        "the playfield is not painted under the screen"
+    );
+}
+
+#[test]
+fn the_overlay_stays_above_a_screen() {
+    let shapes = painted_with(&Game::new(Rng::new(SEED)), Some(&paused()), true);
+    let last_text = shapes.iter().rev().find(|s| matches!(s, Shape::Text(_)));
+    assert!(
+        matches!(last_text, Some(Shape::Text(text)) if text.galley.text().starts_with("claimed")),
+        "{last_text:?}"
+    );
 }
 
 #[test]

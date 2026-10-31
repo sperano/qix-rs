@@ -4,17 +4,17 @@ use eframe::egui::{self, Key};
 use qix_core::{Dir, InputState};
 
 /// Movement keys in priority order: when several are held, the first wins.
-const DIR_KEYS: [(Key, Dir); 4] = [
+pub const DIR_KEYS: [(Key, Dir); 4] = [
     (Key::ArrowUp, Dir::Up),
     (Key::ArrowDown, Dir::Down),
     (Key::ArrowLeft, Dir::Left),
     (Key::ArrowRight, Dir::Right),
 ];
-const FAST_KEY: Key = Key::Z;
-const SLOW_KEY: Key = Key::X;
-const CONFIRM_KEY: Key = Key::Enter;
-const PAUSE_KEY: Key = Key::Escape;
-const OVERLAY_KEY: Key = Key::F1;
+pub const FAST_KEY: Key = Key::Z;
+pub const SLOW_KEY: Key = Key::X;
+pub const CONFIRM_KEY: Key = Key::Enter;
+pub const PAUSE_KEY: Key = Key::Escape;
+pub const OVERLAY_KEY: Key = Key::F1;
 
 /// Reads one frame's controls: held keys for movement and drawing, fresh
 /// presses (not key repeats) for confirm and pause.
