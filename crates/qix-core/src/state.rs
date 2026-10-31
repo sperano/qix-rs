@@ -113,7 +113,7 @@ impl Session {
                     bonus,
                     split,
                 }),
-                Event::Death(_) => None,
+                Event::Death(_) | Event::ExtraLife => None,
             })
             .unwrap_or(GameState::Playing)
     }

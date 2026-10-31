@@ -1,3 +1,5 @@
+mod extra_lives;
+
 use crate::qix_test::qix_at;
 use crate::tuning::{
     BONUS_PER_PERCENT, CLAIM_THRESHOLD_RANGE, FIRST_LEVEL, MARKER_STEP_TICKS, STARTING_LIVES,

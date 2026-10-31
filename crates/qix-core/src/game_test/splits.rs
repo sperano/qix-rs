@@ -1,7 +1,7 @@
 //! Ending a level by splitting the two Qix apart, and the multiplier it
 //! raises.
 
-use super::{SEED, draw, holding, pen};
+use super::{SEED, draw, draw_step_ticks, drawing, holding, pen};
 use crate::qix_test::qix_at;
 use crate::tuning::{
     BOARD_H, BOARD_W, CLAIM_THRESHOLD_RANGE, FIRST_LEVEL, MAX_MULTIPLIER, POINTS_PER_CELL,
@@ -53,9 +53,12 @@ fn sides_game() -> Game {
 /// Draws the stix up the middle of the full board, from the marker's start
 /// to the top edge, and checks that it closed without a death.
 fn close_up_the_middle(game: &mut Game) {
-    let lives = game.lives();
-    draw(game, Dir::Up, DrawKind::Fast, u32::from(BOARD_H));
-    assert_eq!(game.lives(), lives, "the stix was hit");
+    let input = drawing(Dir::Up, DrawKind::Fast);
+    for _ in 0..u32::from(BOARD_H) * draw_step_ticks(DrawKind::Fast) {
+        game.tick(&input);
+        let died = game.events().iter().any(|e| matches!(e, Event::Death(_)));
+        assert!(!died, "the stix was hit");
+    }
     assert_eq!(game.stix(), None, "the stix did not close");
 }
 
@@ -137,7 +140,11 @@ fn a_claim_keeping_both_qix_together_is_no_split() {
 
     assert!(game.board().claimed_fraction() > 0.0, "nothing claimed");
     assert!(!game.is_level_complete());
-    assert_eq!(game.events(), []);
+    let ended = game
+        .events()
+        .iter()
+        .any(|e| matches!(e, Event::LevelComplete { .. }));
+    assert!(!ended, "{:?}", game.events());
     assert_eq!(game.multiplier(), STARTING_MULTIPLIER);
 }
 

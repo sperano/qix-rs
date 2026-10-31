@@ -4,6 +4,7 @@ use crate::{Board, Cell, Dir, DrawKind, Game, InputState, MarkerState, Point, Qi
 
 mod claims;
 mod deaths;
+mod extra_lives;
 mod level_start;
 mod levels;
 mod qix_hits;

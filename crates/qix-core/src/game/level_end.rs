@@ -38,7 +38,7 @@ impl Game {
         } else {
             return;
         };
-        self.score.add(bonus);
+        self.add_score(bonus);
         self.level_complete = true;
         self.events.push(Event::LevelComplete {
             fraction,

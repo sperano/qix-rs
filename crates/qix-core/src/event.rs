@@ -5,6 +5,10 @@
 pub enum Event {
     /// The player lost a life.
     Death(DeathCause),
+    /// The score crossed a multiple of
+    /// [`EXTRA_LIFE_EVERY`](crate::tuning::EXTRA_LIFE_EVERY) and the player
+    /// earned a life: one event per life.
+    ExtraLife,
     /// The player lost the last life, right after its
     /// [`Event::Death`]: the game no longer ticks.
     GameOver,
