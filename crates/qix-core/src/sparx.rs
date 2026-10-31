@@ -1,0 +1,108 @@
+//! The Sparx: enemies walking the border graph that kill the marker on
+//! contact.
+
+use crate::board::Board;
+use crate::geometry::{Dir, Point};
+use crate::rng::Rng;
+
+/// What a Sparx is allowed to walk on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SparxKind {
+    /// Walks the border only.
+    Normal,
+    /// Also chases the marker along the stix (not yet: it walks like a
+    /// [`SparxKind::Normal`] one).
+    Super,
+}
+
+/// A Sparx on a lattice point of the border, heading `dir`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Sparx {
+    pub pos: Point,
+    pub dir: Dir,
+    pub kind: SparxKind,
+}
+
+impl Sparx {
+    /// The two [`SparxKind::Normal`] Sparx of a level start: on the border
+    /// point nearest the centre of `board`'s top edge, one heading left
+    /// and the other right.
+    pub fn spawn_pair(board: &Board) -> [Self; 2] {
+        let top_centre = Point::new(board.width() / 2, 0);
+        let pos = nearest_border_point(board, top_centre).unwrap_or(top_centre);
+        [Dir::Left, Dir::Right].map(|dir| Self {
+            pos,
+            dir,
+            kind: SparxKind::Normal,
+        })
+    }
+
+    /// Moves one step along a border edge of `board`, chosen by [`turn`];
+    /// a Sparx with no border edge stays put.
+    pub fn step(&mut self, board: &Board, rng: &mut Rng) {
+        let edges = || board.border_neighbours(self.pos).map(|(dir, _)| dir);
+        let Some(dir) = turn(self.dir, edges, rng) else {
+            return;
+        };
+        if let Some(next) = dir.step(self.pos) {
+            self.pos = next;
+            self.dir = dir;
+        }
+    }
+
+    /// Moves to the border point of `board` nearest the Sparx's point, as
+    /// [`nearest_border_point`] picks it, when that point is no longer on
+    /// the border; its heading is kept.
+    pub fn snap_to_border(&mut self, board: &Board) {
+        if board.is_border(self.pos) {
+            return;
+        }
+        if let Some(nearest) = nearest_border_point(board, self.pos) {
+            self.pos = nearest;
+        }
+    }
+
+    /// The Sparx, having moved from `from` to its point this tick, touched
+    /// the marker, which moved from `marker_from` to `marker_to`: they end
+    /// on the same point, or they swapped points.
+    pub fn hits_marker(&self, from: Point, marker_from: Point, marker_to: Point) -> bool {
+        self.pos == marker_to || (self.pos == marker_from && from == marker_to)
+    }
+}
+
+/// The direction a Sparx heading `dir` leaves a point by, given the
+/// directions of the point's border edges as `edges` yields them: straight
+/// on when it can; else one of the edges other than back, drawn from `rng`
+/// when there are several; back only at a dead end. `None` when the point
+/// has no edge at all.
+///
+/// `rng` is drawn from only when there is a choice to make.
+pub(crate) fn turn<I>(dir: Dir, edges: impl Fn() -> I, rng: &mut Rng) -> Option<Dir>
+where
+    I: Iterator<Item = Dir>,
+{
+    if edges().any(|edge| edge == dir) {
+        return Some(dir);
+    }
+    let back = dir.opposite();
+    let sideways = || edges().filter(move |&edge| edge != back);
+    let choice = match sideways().count() {
+        0 => return edges().next(),
+        1 => 0,
+        choices => rng.below(choices),
+    };
+    sideways().nth(choice)
+}
+
+/// The border point of `board` the fewest lattice steps (the Manhattan
+/// distance) from `point`, the first in reading order among equally near
+/// ones; `None` when the board has no border.
+pub fn nearest_border_point(board: &Board, point: Point) -> Option<Point> {
+    let (w, h) = (board.width(), board.height());
+    (0..=h)
+        .flat_map(|y| (0..=w).map(move |x| Point::new(x, y)))
+        .filter(|&candidate| board.is_border(candidate))
+        .min_by_key(|candidate| {
+            u32::from(point.x.abs_diff(candidate.x)) + u32::from(point.y.abs_diff(candidate.y))
+        })
+}

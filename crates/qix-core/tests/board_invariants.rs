@@ -4,7 +4,7 @@
 
 use qix_core::stix::legal_moves;
 use qix_core::tuning::SLOW_STEP_TICKS;
-use qix_core::{Board, Dir, DrawKind, Game, InputState, MarkerState, Qix, Stix, Vec2};
+use qix_core::{Board, Dir, DrawKind, Game, InputState, MarkerState, Qix, Sparx, Stix, Vec2};
 
 /// Dimensions of the board the runs play on: small, so that random stix
 /// reach the border before they wind themselves into a dead end.
@@ -166,12 +166,14 @@ fn play(game: &mut Game, step: Move, check: &impl Fn(&Before, &Game)) -> bool {
 }
 
 /// A game on a fresh `W x H` board, with a Qix one unit long at its
-/// centre.
+/// centre and the two Sparx of a level start.
 fn new_game() -> Game {
+    let board = Board::new(W, H);
     let centre = Vec2::new(f32::from(W), f32::from(H)) * 0.5;
     let half = Vec2::new(0.5, 0.0);
     let qix = Qix::new(centre - half, centre + half, Vec2::default(), 0.0);
-    Game::with_board(Board::new(W, H), qix, qix_core::Rng::new(QIX_SEED))
+    let sparx = Sparx::spawn_pair(&board).to_vec();
+    Game::with_board(board, qix, sparx, qix_core::Rng::new(QIX_SEED))
 }
 
 /// Plays one game of random legal moves and returns the stix it closed.
@@ -226,6 +228,15 @@ fn marker_is_on_the_border_when_not_drawing() {
         let marker = game.marker();
         if marker.state == MarkerState::OnBorder {
             assert!(game.board().is_border(marker.pos), "{marker:?}");
+        }
+    });
+}
+
+#[test]
+fn every_sparx_is_on_the_border() {
+    for_every_tick(|_, game| {
+        for sparx in game.sparx() {
+            assert!(game.board().is_border(sparx.pos), "{sparx:?}");
         }
     });
 }

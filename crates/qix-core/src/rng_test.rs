@@ -56,3 +56,32 @@ fn an_empty_range_gives_its_bound() {
 
     assert_eq!(rng.range_f32(3.0, 3.0), 3.0);
 }
+
+#[test]
+fn indices_stay_below_their_bound() {
+    let mut rng = Rng::new(7);
+
+    for _ in 0..DRAWS {
+        let index = rng.below(3);
+        assert!(index < 3, "{index}");
+    }
+}
+
+#[test]
+fn indices_cover_every_value_below_their_bound() {
+    let mut rng = Rng::new(7);
+    let mut seen = [false; 3];
+
+    for _ in 0..DRAWS {
+        seen[rng.below(seen.len())] = true;
+    }
+
+    assert_eq!(seen, [true; 3]);
+}
+
+#[test]
+fn a_bound_of_one_always_gives_zero() {
+    let mut rng = Rng::new(7);
+
+    assert!((0..DRAWS).all(|_| rng.below(1) == 0));
+}

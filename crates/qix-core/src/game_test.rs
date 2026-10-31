@@ -2,6 +2,7 @@ use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS, SLOW_STEP_TICKS};
 use crate::{Board, Cell, Dir, DrawKind, Game, InputState, MarkerState, Point, Qix, Rng, Vec2};
 
 mod qix_hits;
+mod sparx_hits;
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1194;
@@ -30,7 +31,7 @@ fn small_game(board: Board) -> Game {
         Vec2::default(),
         0.0,
     );
-    Game::with_board(board, qix, Rng::new(SEED))
+    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
 }
 
 fn holding(dir: Dir) -> InputState {
