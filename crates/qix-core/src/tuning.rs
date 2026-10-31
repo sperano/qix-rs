@@ -46,3 +46,12 @@ pub const MARKER_HIT_HALF_SIZE: f32 = 0.5;
 
 /// Ticks between two lattice steps of a Sparx along the border.
 pub const SPARX_STEP_TICKS: u32 = 3;
+
+/// Ticks the marker may stand still on the stix it draws before the fuse
+/// is lit at the stix's start: longer than a slow draw step, so drawing
+/// steadily never lights it.
+pub const FUSE_DELAY_TICKS: u32 = TICK_HZ / 2;
+
+/// Ticks the lit fuse takes to burn one segment of the stix towards the
+/// marker.
+pub const FUSE_STEP_TICKS: u32 = 12;

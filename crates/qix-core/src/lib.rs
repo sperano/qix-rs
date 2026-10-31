@@ -10,6 +10,7 @@ mod border;
 pub mod claim;
 pub mod collision;
 pub mod event;
+pub mod fuse;
 pub mod game;
 pub mod geometry;
 pub mod input;
@@ -32,6 +33,8 @@ mod border_test;
 mod claim_test;
 #[cfg(test)]
 mod collision_test;
+#[cfg(test)]
+mod fuse_test;
 #[cfg(test)]
 mod game_test;
 #[cfg(test)]
@@ -57,6 +60,7 @@ pub use bitset::BitSet;
 pub use board::{Board, Cell, DrawKind};
 pub use claim::ClaimResult;
 pub use event::{DeathCause, Event};
+pub use fuse::Fuse;
 pub use game::Game;
 pub use geometry::{Dir, Point, segments_intersect};
 pub use input::InputState;

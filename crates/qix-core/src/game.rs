@@ -3,13 +3,14 @@
 use crate::board::{Board, DrawKind};
 use crate::collision::{qix_hits_marker, qix_hits_stix};
 use crate::event::{DeathCause, Event};
+use crate::fuse::{Fuse, FuseTimer};
 use crate::geometry::{Dir, Point};
 use crate::input::InputState;
 use crate::marker::{Marker, MarkerState};
 use crate::qix::Qix;
 use crate::rng::Rng;
 use crate::sparx::Sparx;
-use crate::stix::{Stix, legal_step};
+use crate::stix::{Stix, legal_moves, legal_step};
 use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS, SLOW_STEP_TICKS, SPARX_STEP_TICKS};
 
 /// The whole game, advanced one fixed step at a time.
@@ -23,6 +24,8 @@ pub struct Game {
     stix: Option<Stix>,
     /// Ticks a direction has been held since the marker's last step.
     marker_held_ticks: u32,
+    /// The fuse of the stix, out while the marker steps.
+    fuse: FuseTimer,
     qix: Qix,
     sparx: Vec<Sparx>,
     /// Ticks since the Sparx last stepped.
@@ -56,6 +59,7 @@ impl Game {
             marker,
             stix: None,
             marker_held_ticks: 0,
+            fuse: FuseTimer::default(),
             qix,
             sparx,
             sparx_ticks: 0,
@@ -65,14 +69,16 @@ impl Game {
     }
 
     /// Advances the game by one step of `1 / TICK_HZ` seconds: the marker
-    /// moves, then the Qix, then the Sparx; a Qix touching the stix or the
-    /// drawing marker raises [`Event::Death`], then so does a Sparx
-    /// touching the marker.
+    /// moves, then the fuse burns, then the Qix moves, then the Sparx; a
+    /// Qix touching the stix or the drawing marker raises
+    /// [`Event::Death`], then so does a Sparx touching the marker, then
+    /// the fuse at the marker.
     pub fn tick(&mut self, input: &InputState) {
         self.ticks += 1;
         self.events.clear();
         let marker_from = self.marker.pos;
         self.move_marker(input);
+        let fuse_hit = self.burn_fuse(marker_from);
         self.qix.tick(&self.board, &mut self.rng);
         let sparx_hit = self.move_sparx(marker_from);
         if self.qix_hits_player() {
@@ -80,6 +86,9 @@ impl Game {
         }
         if sparx_hit {
             self.events.push(Event::Death(DeathCause::Sparx));
+        }
+        if fuse_hit {
+            self.events.push(Event::Death(DeathCause::Fuse));
         }
     }
 
@@ -103,6 +112,11 @@ impl Game {
         self.stix.as_ref()
     }
 
+    /// The fuse burning along the stix, if it is lit.
+    pub fn fuse(&self) -> Option<Fuse> {
+        self.fuse.fuse()
+    }
+
     /// The Qix.
     pub fn qix(&self) -> &Qix {
         &self.qix
@@ -124,6 +138,28 @@ impl Game {
         self.stix.as_ref().is_some_and(|stix| {
             qix_hits_stix(&self.qix, stix) || qix_hits_marker(&self.qix, self.marker.pos)
         })
+    }
+
+    /// Burns the fuse one tick of a marker standing still on the stix, or
+    /// puts it out when the marker stepped from `marker_from` this tick or
+    /// has no stix; a marker caught in a dead end lights it at once.
+    /// Returns whether the fuse is at the marker: it stays there, raising
+    /// a death every tick, until the marker leaves the stix.
+    fn burn_fuse(&mut self, marker_from: Point) -> bool {
+        let Some(stix) = &self.stix else {
+            self.fuse.put_out();
+            return false;
+        };
+        let head = stix.points().len() - 1;
+        if self.marker.pos == marker_from {
+            self.fuse.stand(head);
+        } else {
+            self.fuse.put_out();
+        }
+        if self.fuse.fuse().is_none() && legal_moves(&self.marker, stix, &self.board).is_empty() {
+            self.fuse.light();
+        }
+        self.fuse.reached(head)
     }
 
     /// Steps every Sparx once every [`SPARX_STEP_TICKS`] ticks. Returns
