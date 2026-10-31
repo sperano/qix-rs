@@ -3,7 +3,7 @@
 mod level_start;
 
 use crate::board::{Board, DrawKind};
-use crate::collision::{qix_hits_marker, qix_hits_stix};
+use crate::collision::qix_hits_player;
 use crate::event::{DeathCause, Event};
 use crate::fuse::{Fuse, FuseTimer};
 use crate::geometry::{Dir, Point};
@@ -295,11 +295,9 @@ impl Game {
     /// A Qix touches the stix or the marker drawing it; a marker on the
     /// border has no stix and is never hit.
     fn qix_hits_player(&self) -> bool {
-        self.stix.as_ref().is_some_and(|stix| {
-            self.qix
-                .iter()
-                .any(|qix| qix_hits_stix(qix, stix) || qix_hits_marker(qix, self.marker.pos))
-        })
+        self.stix
+            .as_ref()
+            .is_some_and(|stix| qix_hits_player(&self.qix, stix, self.marker.pos))
     }
 
     /// Burns the fuse one tick of a marker standing still on the stix, or

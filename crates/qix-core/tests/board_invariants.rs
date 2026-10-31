@@ -20,7 +20,7 @@ const H: u16 = 9;
 const SEEDS: [u64; 8] = [1, 2, 3, 5, 8, 13, 21, 34];
 
 /// Games a run plays, each on a fresh board.
-const GAMES_PER_RUN: u32 = 20;
+const GAMES_PER_RUN: u32 = 30;
 
 /// Moves a game plays at most; a stix caught in a dead end ends it sooner.
 const MOVES_PER_GAME: u32 = 300;

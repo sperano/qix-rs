@@ -13,6 +13,9 @@ use crate::tuning::{
 };
 use crate::vec2::Vec2;
 
+// [`Qix::previous`] reads the segment before the newest off the trail.
+const _: () = assert!(QIX_TRAIL_LEN >= 2);
+
 /// The Qix, in playfield units.
 ///
 /// It keeps its length: each tick its midpoint moves by `vel` and the
@@ -106,6 +109,13 @@ impl Qix {
     /// The speeds the midpoint keeps within, in playfield units per tick.
     pub fn speed(&self) -> &RangeInclusive<f32> {
         &self.speed
+    }
+
+    /// The segment a tick ago, or the current one when the Qix has not
+    /// ticked yet.
+    pub fn previous(&self) -> (Vec2, Vec2) {
+        let mut newest_first = self.trail.iter().rev();
+        newest_first.nth(1).copied().unwrap_or((self.a, self.b))
     }
 
     /// The last segments, oldest first, the current one last; at most

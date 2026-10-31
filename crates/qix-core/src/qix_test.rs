@@ -300,3 +300,15 @@ fn a_spawned_qix_keeps_within_its_speed_range() {
         assert!(bounds.contains(&speed), "tick {tick}: speed {speed}");
     });
 }
+
+#[test]
+fn the_previous_segment_is_the_one_before_the_last_tick() {
+    let mut qix = qix_at((1, 1));
+    let start = (qix.a(), qix.b());
+    assert_eq!(qix.previous(), start, "before any tick");
+
+    qix.tick(&Board::new(BOARD_W, BOARD_H), &mut Rng::new(SEED));
+
+    assert_eq!(qix.previous(), start);
+    assert_ne!((qix.a(), qix.b()), start);
+}

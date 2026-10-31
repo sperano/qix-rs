@@ -88,6 +88,22 @@ pub fn segments_intersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2) -> bool {
         || (side_d == 0.0 && in_box(a, b, d))
 }
 
+/// `point` lies inside `triangle` or on one of its sides. A triangle with
+/// no area holds no point: its sides, as segments, are the caller's to
+/// test.
+pub fn in_triangle(point: Vec2, triangle: [Vec2; 3]) -> bool {
+    let [p, q, r] = triangle;
+    if orientation(p, q, r) == 0.0 {
+        return false;
+    }
+    let sides = [
+        orientation(p, q, point),
+        orientation(q, r, point),
+        orientation(r, p, point),
+    ];
+    sides.iter().all(|&side| side >= 0.0) || sides.iter().all(|&side| side <= 0.0)
+}
+
 /// Which side of the line from `from` to `to` `point` lies on: the sign of
 /// the cross product, zero on the line.
 fn orientation(from: Vec2, to: Vec2, point: Vec2) -> f32 {
