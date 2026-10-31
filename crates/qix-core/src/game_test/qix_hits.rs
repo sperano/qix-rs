@@ -55,12 +55,14 @@ fn band_and_column() -> Game {
     Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
 }
 
-/// Ticks `game` `ticks` times with `input` and returns the deaths raised.
+/// Ticks `game` `ticks` times with `input` and returns the deaths the
+/// Qix raised: a marker standing still that long also lights the fuse.
 fn deaths(game: &mut Game, input: InputState, ticks: u32) -> Vec<Event> {
     let mut deaths = Vec::new();
     for _ in 0..ticks {
         game.tick(&input);
-        deaths.extend_from_slice(game.events());
+        let by_qix = |&&event: &&Event| event == Event::Death(DeathCause::Qix);
+        deaths.extend(game.events().iter().filter(by_qix));
     }
     deaths
 }
