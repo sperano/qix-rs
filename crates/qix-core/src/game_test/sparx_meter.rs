@@ -24,19 +24,32 @@ const GAP: u16 = 2;
 /// marker: after both expiries of a meter of [`LENGTH`].
 const DEATH_TICK: u32 = SPARX_STEP_TICKS * GAP as u32;
 
-/// A game on a free `W x H` board with a meter of `length`, a short Qix
-/// in the top-left cell (the marker never draws, so the Qix never kills)
-/// and one Sparx [`GAP`] steps right of the marker heading for it.
-fn meter_game(length: u32) -> Game {
-    let sparx = Sparx {
+/// Where the marker starts, and where the Sparx of [`meter_game`] kills
+/// it on [`DEATH_TICK`].
+const MARKER_START: Point = Point::new(W / 2, H);
+
+/// The Sparx [`GAP`] steps right of the marker, heading for it.
+fn killer() -> Sparx {
+    Sparx {
         pos: Point::new(W / 2 + GAP, H),
         dir: Dir::Left,
         kind: SparxKind::Normal,
-    };
+    }
+}
+
+/// A game on a free `W x H` board with a meter of `length`, a short Qix
+/// in the top-left cell (the marker never draws, so the Qix never kills)
+/// and `sparx` as the level's Sparx.
+fn game_with(sparx: Vec<Sparx>, length: u32) -> Game {
     let board = Board::new(W, H);
-    let mut game = Game::with_board(board, qix_at((0, 0)), vec![sparx], Rng::new(SEED));
+    let mut game = Game::with_board(board, qix_at((0, 0)), sparx, Rng::new(SEED));
     game.set_sparx_meter(SparxMeter::new(length));
     game
+}
+
+/// A game of [`game_with`] whose only level Sparx is the [`killer`].
+fn meter_game(length: u32) -> Game {
+    game_with(vec![killer()], length)
 }
 
 fn stand(game: &mut Game, ticks: u32) {
@@ -109,6 +122,27 @@ fn a_death_resets_the_meter_and_undoes_its_expiries() {
     assert_eq!(game.events(), [Event::Death(DeathCause::Sparx)]);
     assert_eq!(game.sparx_meter(), SparxMeter::new(LENGTH));
     assert_eq!(kinds(&game), [SparxKind::Normal]);
+    assert_eq!(game.sparx()[0].pos, MARKER_START);
+}
+
+#[test]
+fn a_death_gives_every_level_sparx_back_its_own_starting_kind() {
+    let far = Sparx {
+        pos: Point::new(0, 0),
+        dir: Dir::Down,
+        kind: SparxKind::Super,
+    };
+    let mut game = game_with(vec![killer(), far], LENGTH);
+    stand(&mut game, DEATH_TICK - 1);
+    assert_eq!(kinds(&game), [SparxKind::Super; 2 + EXTRA_SPARX]);
+
+    stand(&mut game, 1);
+
+    assert_eq!(game.events(), [Event::Death(DeathCause::Sparx)]);
+    assert_eq!(kinds(&game), [SparxKind::Normal, SparxKind::Super]);
+    assert_eq!(game.sparx()[0].pos, MARKER_START);
+    // Down the left border, one step per step of the killer.
+    assert_eq!(game.sparx()[1].pos, Point::new(0, GAP));
 }
 
 #[test]
