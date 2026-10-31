@@ -1,11 +1,11 @@
 //! Completing a level through [`Game::tick`]: a claim reaching the claim
-//! threshold.
+//! threshold, which leaves the multiplier as it is.
 
 use super::{SEED, draw, drawing, hold, holding, penned};
 use crate::qix_test::qix_at;
 use crate::tuning::{
     BONUS_PER_PERCENT, CLAIM_THRESHOLD_DEFAULT, CLAIM_THRESHOLD_RANGE, FUSE_DELAY_TICKS,
-    MARKER_STEP_TICKS, POINTS_PER_CELL,
+    MARKER_STEP_TICKS, POINTS_PER_CELL, STARTING_MULTIPLIER,
 };
 use crate::{
     Board, Cell, ClaimThreshold, Dir, DrawKind, Event, Game, InputState, Point, Rng, Sparx,
@@ -96,7 +96,8 @@ fn a_claim_exactly_at_the_threshold_completes_the_level() {
     assert_eq!(
         game.events(),
         [Event::LevelComplete {
-            fraction: FRACTION_AFTER
+            fraction: FRACTION_AFTER,
+            split: false,
         }]
     );
     let claim_points = STIX_CLAIM_CELLS * POINTS_PER_CELL;
@@ -105,6 +106,23 @@ fn a_claim_exactly_at_the_threshold_completes_the_level() {
         claim_points,
         "a bonus at the threshold"
     );
+}
+
+#[test]
+fn a_threshold_completion_keeps_the_multiplier() {
+    let mut game = game_with_claimed(CLAIMED_BEFORE.len());
+    game.set_multiplier(STARTING_MULTIPLIER + 1);
+
+    close_stix(&mut game);
+
+    assert_eq!(
+        game.events(),
+        [Event::LevelComplete {
+            fraction: FRACTION_AFTER,
+            split: false,
+        }]
+    );
+    assert_eq!(game.multiplier(), STARTING_MULTIPLIER + 1);
 }
 
 #[test]
@@ -184,7 +202,8 @@ fn nothing_moves_after_the_completing_claim_in_its_tick() {
     assert_eq!(
         game.events(),
         [Event::LevelComplete {
-            fraction: FRACTION_AFTER
+            fraction: FRACTION_AFTER,
+            split: false,
         }]
     );
     assert_eq!((game.qix(), game.sparx()), (&last.0[..], &last.1[..]));

@@ -77,6 +77,9 @@ pub const SLOW_DRAW_FACTOR: u32 = 2;
 /// The level multiplier a game starts with.
 pub const STARTING_MULTIPLIER: u32 = 1;
 
+/// The highest level multiplier: splitting the Qix no longer raises it.
+pub const MAX_MULTIPLIER: u32 = 9;
+
 /// The claimed fraction of the board that completes a level, unless the
 /// settings change it.
 pub const CLAIM_THRESHOLD_DEFAULT: f32 = 0.75;
