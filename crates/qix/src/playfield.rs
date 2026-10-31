@@ -40,14 +40,15 @@ pub fn to_screen(available: Rect) -> RectTransform {
     RectTransform::from_to(playfield_units(), letterbox(available))
 }
 
-/// Fills `ui` with the playfield: its background and `game`'s board, with
-/// the debug overlay on top when `overlay` is set.
+/// Fills `ui` with the playfield: its background, `game`'s board and its
+/// enemies, with the debug overlay on top when `overlay` is set.
 pub fn show(ui: &mut egui::Ui, game: &Game, overlay: bool) {
     let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::hover());
     let to_screen = to_screen(response.rect);
     let field = to_screen.transform_rect(playfield_units());
     painter.rect_filled(field, 0.0, palette::PLAYFIELD_BACKGROUND);
     render::board::paint(&painter, to_screen, game);
+    render::enemies::paint(&painter, to_screen, game);
     if overlay {
         render::overlay::paint(&painter, field, game);
     }

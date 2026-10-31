@@ -162,7 +162,7 @@ fn paint_stix(painter: &Painter, to_screen: RectTransform, stix: &Stix) {
 }
 
 /// The screen position of lattice point `point`.
-fn screen(to_screen: RectTransform, point: Point) -> Pos2 {
+pub fn screen(to_screen: RectTransform, point: Point) -> Pos2 {
     to_screen.transform_pos(pos2(f32::from(point.x), f32::from(point.y)))
 }
 
