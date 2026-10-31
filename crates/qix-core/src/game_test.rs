@@ -1,6 +1,8 @@
+use crate::qix_test::qix_at;
 use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS, SLOW_STEP_TICKS};
-use crate::{Board, Cell, Dir, DrawKind, Game, InputState, MarkerState, Point, Qix, Rng, Vec2};
+use crate::{Board, Cell, Dir, DrawKind, Game, InputState, MarkerState, Point, Rng};
 
+mod claims;
 mod qix_hits;
 mod sparx_hits;
 
@@ -25,13 +27,7 @@ fn new_game() -> Game {
 /// A game on `board` with a short Qix in its top-left cell, which must be
 /// free.
 fn small_game(board: Board) -> Game {
-    let qix = Qix::new(
-        Vec2::new(0.25, 0.5),
-        Vec2::new(0.75, 0.5),
-        Vec2::default(),
-        0.0,
-    );
-    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
+    Game::with_board(board, qix_at((0, 0)), Vec::new(), Rng::new(SEED))
 }
 
 fn holding(dir: Dir) -> InputState {
@@ -373,29 +369,6 @@ fn claimed_cells(board: &Board) -> Vec<(u16, u16)> {
         .flat_map(|y| (0..width).map(move |x| (x, y)))
         .filter(|&(x, y)| board.cell(i32::from(x), i32::from(y)).is_claimed())
         .collect()
-}
-
-#[test]
-fn closing_a_stix_claims_the_side_without_the_centre_cell() {
-    let mut game = small_game(Board::new(W, H));
-    let cut_x = game.marker().pos.x;
-
-    draw(&mut game, Dir::Up, DrawKind::Slow, u32::from(H));
-
-    let board = game.board();
-    for y in 0..H {
-        for x in 0..W {
-            let expected = if x < cut_x {
-                Cell::Claimed(DrawKind::Slow)
-            } else {
-                Cell::Free
-            };
-            let cell = board.cell(i32::from(x), i32::from(y));
-            assert_eq!(cell, expected, "({x}, {y})");
-        }
-    }
-    let claimed = f32::from(cut_x) / f32::from(W);
-    assert_eq!(board.claimed_fraction(), claimed);
 }
 
 /// Draws the L-shaped stix on the `W x H` board: up one step from the

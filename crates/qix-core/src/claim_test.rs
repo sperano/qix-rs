@@ -1,4 +1,5 @@
-use crate::claim::{claim, flood_free};
+use crate::claim::{claim, flood_free, regions};
+use crate::qix_test::qix_at;
 use crate::tuning::{BOARD_H, BOARD_W};
 use crate::{BitSet, Board, Cell, ClaimResult, Dir, DrawKind, Point, Stix};
 
@@ -23,6 +24,12 @@ fn drawn_with(start: Point, path: &[Dir], kind: DrawKind) -> Stix {
         stix.push(next, kind);
     }
     stix
+}
+
+/// Claims every free cell outside the area of `seed`, as `stix` draws.
+fn claim_from(board: &mut Board, stix: &Stix, seed: (u16, u16)) -> usize {
+    let kept = regions(board, stix, &[seed]);
+    claim(board, &kept, stix.claim_kind())
 }
 
 /// `steps` steps towards `dir`.
@@ -74,7 +81,7 @@ fn a_straight_cut_stops_the_fill() {
 fn a_straight_cut_claims_the_half_without_the_seed() {
     let mut board = Board::new(W, H);
 
-    let count = claim(&mut board, &straight_cut(), (0, 2));
+    let count = claim_from(&mut board, &straight_cut(), (0, 2));
 
     assert_eq!(count, usize::from((W - CUT_X) * H));
     assert_eq!(free_cells(&board), side_of_cut(&board, true));
@@ -87,7 +94,7 @@ fn a_straight_cut_claims_the_half_without_the_seed() {
 fn the_seed_side_of_a_cut_stays_free_whichever_side_it_is() {
     let mut board = Board::new(W, H);
 
-    claim(&mut board, &straight_cut(), (W - 1, 0));
+    claim_from(&mut board, &straight_cut(), (W - 1, 0));
 
     assert_eq!(free_cells(&board), side_of_cut(&board, false));
 }
@@ -97,7 +104,7 @@ fn a_slow_stix_claims_slow() {
     let mut board = Board::new(W, H);
     let stix = drawn_with(Point::new(CUT_X, H), &run(Dir::Up, H), SLOW);
 
-    claim(&mut board, &stix, (0, 0));
+    claim_from(&mut board, &stix, (0, 0));
 
     assert_eq!(board.cell(i32::from(W - 1), 0), Cell::Claimed(SLOW));
 }
@@ -119,7 +126,7 @@ fn inside_l(board: &Board) -> Vec<(u16, u16)> {
 fn an_l_shaped_cut_claims_its_corner_from_a_seed_outside() {
     let mut board = Board::new(W, H);
 
-    let count = claim(&mut board, &l_cut(), (0, 0));
+    let count = claim_from(&mut board, &l_cut(), (0, 0));
 
     let corner = inside_l(&board);
     assert_eq!(count, corner.len());
@@ -133,7 +140,7 @@ fn an_l_shaped_cut_claims_its_corner_from_a_seed_outside() {
 fn an_l_shaped_cut_keeps_its_corner_from_a_seed_inside() {
     let mut board = Board::new(W, H);
 
-    claim(&mut board, &l_cut(), (W - 1, H - 1));
+    claim_from(&mut board, &l_cut(), (W - 1, H - 1));
 
     assert_eq!(free_cells(&board), inside_l(&board));
 }
@@ -143,7 +150,7 @@ fn a_stix_touching_the_border_without_enclosing_claims_nothing() {
     let mut board = Board::new(W, H);
     let stix = drawn_with(Point::new(CUT_X, H), &run(Dir::Up, H - 1), FAST);
 
-    let count = claim(&mut board, &stix, (0, H - 1));
+    let count = claim_from(&mut board, &stix, (0, H - 1));
 
     assert_eq!(count, 0);
     assert_eq!(board, Board::new(W, H));
@@ -158,7 +165,7 @@ fn a_cut_ending_on_a_claimed_area_claims_only_free_cells() {
     }
     let stix = drawn_with(Point::new(0, CUT_Y), &run(Dir::Right, claimed_x), SLOW);
 
-    let count = claim(&mut board, &stix, (0, 0));
+    let count = claim_from(&mut board, &stix, (0, 0));
 
     let below: Vec<_> = cells(&board)
         .filter(|&(x, y)| x < claimed_x && y >= CUT_Y)
@@ -223,7 +230,7 @@ fn closing_a_cut_reports_its_cells_the_claimed_fraction_and_kind() {
     let mut board = Board::new(W, H);
     let stix = drawn_with(Point::new(CUT_X, H), &run(Dir::Up, H), SLOW);
 
-    let result = board.close_stix(&stix, (0, 0));
+    let result = board.close_stix(&stix, &[qix_at((0, 0))]).claim;
 
     let cells = usize::from((W - CUT_X) * H);
     let expected = ClaimResult {
@@ -240,6 +247,102 @@ fn closing_a_stix_that_encloses_nothing_reports_none() {
     let mut board = Board::new(W, H);
     let stix = drawn_with(Point::new(CUT_X, H), &run(Dir::Up, H - 1), FAST);
 
-    assert_eq!(board.close_stix(&stix, (0, H - 1)), None);
+    let result = board.close_stix(&stix, &[qix_at((0, H - 1))]);
+
+    assert_eq!(result.claim, None);
     assert_eq!(board, Board::new(W, H));
+}
+
+/// A fast stix from the top edge at `CUT_X` straight down to the bottom:
+/// [`straight_cut`] drawn the other way.
+fn straight_cut_from_top() -> Stix {
+    drawn_with(Point::new(CUT_X, 0), &run(Dir::Down, H), FAST)
+}
+
+#[test]
+fn the_side_holding_the_qix_stays_free_whichever_end_the_stix_starts() {
+    for cut in [straight_cut(), straight_cut_from_top()] {
+        for (qix, left) in [((0, 2), true), ((W - 1, 2), false)] {
+            let mut board = Board::new(W, H);
+
+            board.close_stix(&cut, &[qix_at(qix)]);
+
+            assert_eq!(free_cells(&board), side_of_cut(&board, left), "{qix:?}");
+        }
+    }
+}
+
+#[test]
+fn seeds_in_one_area_get_equal_regions() {
+    let board = Board::new(W, H);
+
+    let sets = regions(&board, &straight_cut(), &[(0, 0), (CUT_X - 1, H - 1)]);
+
+    assert_eq!(sets[0], sets[1]);
+    assert_eq!(reached(&board, &sets[0]), side_of_cut(&board, true));
+}
+
+#[test]
+fn seeds_either_side_of_a_cut_get_their_own_side() {
+    let board = Board::new(W, H);
+
+    let sets = regions(&board, &straight_cut(), &[(W - 1, 0), (0, 0)]);
+
+    assert_eq!(reached(&board, &sets[0]), side_of_cut(&board, false));
+    assert_eq!(reached(&board, &sets[1]), side_of_cut(&board, true));
+}
+
+#[test]
+fn a_claimed_seed_after_a_free_one_gets_an_empty_region() {
+    let mut board = Board::new(W, H);
+    board.set_cell(W - 1, 0, Cell::Claimed(FAST));
+
+    let sets = regions(&board, &straight_cut(), &[(0, 0), (W - 1, 0)]);
+
+    assert_eq!(sets[1].count(), 0);
+}
+
+#[test]
+fn two_qix_on_one_side_keep_only_that_side() {
+    let mut board = Board::new(W, H);
+    let qix = [qix_at((0, 0)), qix_at((1, H - 1))];
+
+    let result = board.close_stix(&straight_cut(), &qix);
+
+    assert_eq!(free_cells(&board), side_of_cut(&board, true));
+    assert_eq!(result.regions[0], result.regions[1]);
+    assert_eq!(
+        result.claim.map(|claim| claim.cells),
+        Some(usize::from((W - CUT_X) * H))
+    );
+}
+
+#[test]
+fn a_qix_either_side_of_a_cut_keeps_both_sides_in_separate_regions() {
+    let mut board = Board::new(W, H);
+    let qix = [qix_at((0, 0)), qix_at((W - 1, 0))];
+
+    let result = board.close_stix(&straight_cut(), &qix);
+
+    assert_eq!(result.claim, None);
+    assert_eq!(board, Board::new(W, H));
+    assert_eq!(
+        reached(&board, &result.regions[0]),
+        side_of_cut(&board, true)
+    );
+    assert_eq!(
+        reached(&board, &result.regions[1]),
+        side_of_cut(&board, false)
+    );
+}
+
+#[test]
+fn closing_without_a_qix_claims_every_free_cell() {
+    let mut board = Board::new(W, H);
+
+    let result = board.close_stix(&straight_cut(), &[]);
+
+    assert_eq!(result.regions, []);
+    assert_eq!(free_cells(&board), []);
+    assert_eq!(result.claim.map(|claim| claim.fraction), Some(1.0));
 }

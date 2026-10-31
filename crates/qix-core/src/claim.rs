@@ -1,8 +1,9 @@
-//! Closing a stix: the flood fill that finds the free area holding a seed
-//! cell, and the claim of every other free cell.
+//! Closing a stix: the flood fills that find the free areas holding the
+//! Qix, and the claim of every other free cell.
 
 use crate::bitset::BitSet;
 use crate::board::{Board, Cell, DrawKind};
+use crate::qix::Qix;
 use crate::stix::Stix;
 
 /// What closing a stix claimed.
@@ -16,20 +17,38 @@ pub struct ClaimResult {
     pub kind: DrawKind,
 }
 
+/// What closing a stix did.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CloseResult {
+    /// What the stix claimed, or `None` when it claimed nothing.
+    pub claim: Option<ClaimResult>,
+    /// For each Qix, in the order given, the free cells of the area
+    /// holding it: the [`regions`] of their [`Qix::cell`]s. Two Qix share
+    /// an area exactly when their sets are equal, so a close that leaves
+    /// them apart shows here even when it claims nothing.
+    pub regions: Vec<BitSet>,
+}
+
 impl Board {
-    /// Closes `stix`: [`claim`]s every free cell outside the area holding
-    /// the cell `seed`. Returns `None` when the stix enclosed nothing.
+    /// Closes `stix`: [`claim`]s every free cell outside the areas holding
+    /// a Qix of `qix`, each found from its [`Qix::cell`]. With no Qix,
+    /// every free cell is claimed.
     ///
     /// The border follows by itself, since [`Board::is_border`] reads the
     /// cells: the stix's points now lie between the claimed cells and the
-    /// free area kept.
-    pub fn close_stix(&mut self, stix: &Stix, seed: (u16, u16)) -> Option<ClaimResult> {
-        let cells = claim(self, stix, seed);
-        (cells > 0).then(|| ClaimResult {
-            cells,
-            fraction: self.claimed_fraction(),
-            kind: stix.claim_kind(),
-        })
+    /// free areas kept.
+    pub fn close_stix(&mut self, stix: &Stix, qix: &[Qix]) -> CloseResult {
+        let seeds: Vec<_> = qix.iter().map(Qix::cell).collect();
+        let regions = regions(self, stix, &seeds);
+        let cells = claim(self, &regions, stix.claim_kind());
+        CloseResult {
+            claim: (cells > 0).then(|| ClaimResult {
+                cells,
+                fraction: self.claimed_fraction(),
+                kind: stix.claim_kind(),
+            }),
+            regions,
+        }
     }
 }
 
@@ -43,7 +62,45 @@ impl Board {
 /// the board or on a claimed cell reaches nothing. Runs in `O(W * H)`
 /// with an explicit stack.
 pub fn flood_free(board: &Board, stix: &Stix, seed: (u16, u16)) -> BitSet {
+    flood(board, &Walls::new(board, stix), seed)
+}
+
+/// The [`flood_free`] set of each of `seeds`, in order. A seed in the area
+/// of an earlier one gets a copy of its set instead of a new fill, so the
+/// whole runs in `O(W * H)` per distinct area plus a copy per seed.
+pub fn regions(board: &Board, stix: &Stix, seeds: &[(u16, u16)]) -> Vec<BitSet> {
     let walls = Walls::new(board, stix);
+    let mut sets: Vec<BitSet> = Vec::with_capacity(seeds.len());
+    for &seed in seeds {
+        let known = sets
+            .iter()
+            .find(|set| is_free(board, seed) && set.contains(cell_index(board, seed)));
+        let set = known.cloned().unwrap_or_else(|| flood(board, &walls, seed));
+        sets.push(set);
+    }
+    sets
+}
+
+/// Claims, as `kind`, every free cell that none of `kept` holds, and
+/// returns how many it claimed. With nothing kept, every free cell goes.
+pub fn claim(board: &mut Board, kept: &[BitSet], kind: DrawKind) -> usize {
+    let claimed = Cell::Claimed(kind);
+    let mut count = 0;
+    for y in 0..board.height() {
+        for x in 0..board.width() {
+            let index = cell_index(board, (x, y));
+            if is_free(board, (x, y)) && !kept.iter().any(|set| set.contains(index)) {
+                board.set_cell(x, y, claimed);
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+/// The free cells reachable from `seed` without crossing `walls`: see
+/// [`flood_free`].
+fn flood(board: &Board, walls: &Walls, seed: (u16, u16)) -> BitSet {
     let mut reached = BitSet::new(usize::from(board.width()) * usize::from(board.height()));
     if !is_free(board, seed) {
         return reached;
@@ -58,26 +115,6 @@ pub fn flood_free(board: &Board, stix: &Stix, seed: (u16, u16)) -> BitSet {
         }
     }
     reached
-}
-
-/// Claims, as [`Stix::claim_kind`], every free cell that [`flood_free`]
-/// does not reach from `seed`, and returns how many it claimed.
-///
-/// A seed that reaches nothing (off the board or claimed) claims every
-/// free cell: the caller picks a free seed in the area to keep.
-pub fn claim(board: &mut Board, stix: &Stix, seed: (u16, u16)) -> usize {
-    let kept = flood_free(board, stix, seed);
-    let claimed = Cell::Claimed(stix.claim_kind());
-    let mut count = 0;
-    for y in 0..board.height() {
-        for x in 0..board.width() {
-            if is_free(board, (x, y)) && !kept.contains(cell_index(board, (x, y))) {
-                board.set_cell(x, y, claimed);
-                count += 1;
-            }
-        }
-    }
-    count
 }
 
 /// The unit lattice edges a stix covers, which a flood fill may not cross.
