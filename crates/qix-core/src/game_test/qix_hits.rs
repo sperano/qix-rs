@@ -18,6 +18,10 @@ const COLUMN: u16 = 15;
 /// Steps the stix goes up into the band before turning right.
 const STEPS_UP: u32 = 2;
 
+/// Steps the marker goes past [`COLUMN`], far enough that the Qix in it
+/// stays clear of the marker's square.
+const CLEAR_OF_COLUMN: u32 = 3;
+
 /// Ticks the tests watch a standing marker or Qix for.
 const WATCH_TICKS: u32 = 60;
 
@@ -78,13 +82,21 @@ fn draw_up_then_right(game: &mut Game, right: u32) -> Vec<Event> {
 fn a_qix_crossing_a_horizontal_stix_kills() {
     let mut game = band_and_column();
     let start_x = u32::from(game.marker().pos.x);
-    let past_column = u32::from(COLUMN) + 1 - start_x;
+    let past_column = u32::from(COLUMN) + CLEAR_OF_COLUMN - start_x;
+    draw_up_then_right(&mut game, past_column);
 
-    let raised = draw_up_then_right(&mut game, past_column);
+    game.tick(&InputState::default());
 
     assert!(game.stix().is_some(), "the stix closed");
-    assert_eq!(game.marker().pos.x, COLUMN + 1);
-    assert_eq!(raised.first(), Some(&Event::Death(DeathCause::Qix)));
+    assert_eq!(
+        u32::from(game.marker().pos.x),
+        u32::from(COLUMN) + CLEAR_OF_COLUMN
+    );
+    assert!(
+        !qix_hits_marker(game.qix(), game.marker().pos),
+        "the Qix touches the marker"
+    );
+    assert_eq!(game.events(), [Event::Death(DeathCause::Qix)]);
 }
 
 #[test]

@@ -29,8 +29,8 @@ impl Default for QixApp {
     }
 }
 
-/// The nanoseconds since the Unix epoch, folded into 64 bits; zero on a
-/// clock set before it.
+/// The nanoseconds since the Unix epoch, truncated to their low 64 bits;
+/// zero on a clock set before it.
 fn clock_seed() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
