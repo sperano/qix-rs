@@ -256,10 +256,11 @@ fn marker_is_on_the_border_when_not_drawing() {
 }
 
 #[test]
-fn every_sparx_is_on_the_border() {
+fn every_sparx_is_on_the_border_or_chasing_along_the_stix() {
     for_every_tick(|_, game| {
         for sparx in game.sparx() {
-            assert!(game.board().is_border(sparx.pos), "{sparx:?}");
+            let chasing = game.stix().is_some_and(|stix| sparx.chases_along(stix));
+            assert!(game.board().is_border(sparx.pos) || chasing, "{sparx:?}");
         }
     });
 }

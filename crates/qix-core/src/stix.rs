@@ -103,6 +103,16 @@ impl Stix {
         }
     }
 
+    /// The direction of the step from `point` one lattice point along the
+    /// stix towards its head; `None` at the head or off the stix. A
+    /// corner of the polyline leads along the segment it starts.
+    pub fn towards_head(&self, point: Point) -> Option<Dir> {
+        let (_, end) = self
+            .segments()
+            .find(|&(from, to)| point != to && on_segment(from, to, point))?;
+        Dir::between(point, end)
+    }
+
     /// The segments, as their two ends, from the start to the head.
     pub fn segments(&self) -> impl Iterator<Item = (Point, Point)> + '_ {
         self.points.windows(2).map(|pair| (pair[0], pair[1]))

@@ -4,14 +4,15 @@
 use crate::board::Board;
 use crate::geometry::{Dir, Point};
 use crate::rng::Rng;
+use crate::stix::Stix;
 
 /// What a Sparx is allowed to walk on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SparxKind {
     /// Walks the border only.
     Normal,
-    /// Also chases the marker along the stix (not yet: it walks like a
-    /// [`SparxKind::Normal`] one).
+    /// Also chases the marker along the stix: from the stix's start it
+    /// walks the stix towards the marker.
     Super,
 }
 
@@ -58,6 +59,24 @@ impl Sparx {
     pub fn step(&mut self, board: &Board, rng: &mut Rng) {
         let edges = || board.border_neighbours(self.pos).map(|(dir, _)| dir);
         let Some(dir) = turn(self.dir, edges, rng) else {
+            return;
+        };
+        if let Some(next) = dir.step(self.pos) {
+            self.pos = next;
+            self.dir = dir;
+        }
+    }
+
+    /// The Sparx walks `stix` instead of the border: it is
+    /// [`SparxKind::Super`] and on a point of the stix, its start included.
+    pub fn chases_along(&self, stix: &Stix) -> bool {
+        self.kind == SparxKind::Super && stix.contains_point(self.pos)
+    }
+
+    /// Moves one lattice step along `stix` towards its head, where the
+    /// marker is; a Sparx at the head or off the stix stays put.
+    pub fn step_along_stix(&mut self, stix: &Stix) {
+        let Some(dir) = stix.towards_head(self.pos) else {
             return;
         };
         if let Some(next) = dir.step(self.pos) {

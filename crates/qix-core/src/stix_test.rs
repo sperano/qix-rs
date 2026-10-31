@@ -235,3 +235,25 @@ fn a_dead_end_has_no_legal_move() {
     assert_eq!(stix.head(), Point::new(2, H - 2));
     assert!(legal_moves(&marker_on(&stix), &stix, &board()).is_empty());
 }
+
+#[test]
+fn towards_head_follows_the_segments_round_their_corners() {
+    let stix = drawn(&[Dir::Up, Dir::Up, Dir::Right, Dir::Up]);
+    let corner = Point::new(START.x, H - 2);
+
+    assert_eq!(stix.towards_head(START), Some(Dir::Up));
+    assert_eq!(stix.towards_head(Point::new(START.x, H - 1)), Some(Dir::Up));
+    assert_eq!(stix.towards_head(corner), Some(Dir::Right));
+    assert_eq!(
+        stix.towards_head(Point::new(START.x + 1, H - 2)),
+        Some(Dir::Up)
+    );
+}
+
+#[test]
+fn towards_head_is_none_at_the_head_and_off_the_stix() {
+    let stix = drawn(&[Dir::Up, Dir::Up]);
+
+    assert_eq!(stix.towards_head(stix.head()), None);
+    assert_eq!(stix.towards_head(Point::new(START.x + 1, H - 1)), None);
+}
