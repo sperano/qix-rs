@@ -1,5 +1,5 @@
 //! Board invariants over random legal draw sequences played through
-//! [`Game::tick`]: plain loops over a seeded generator, until the
+//! [`Game::tick`]: plain loops over the game's seeded generator, until the
 //! simulation harness brings `proptest`.
 
 use qix_core::stix::legal_moves;
@@ -36,21 +36,12 @@ const MIN_CLOSES_PER_RUN: u32 = 20;
 /// The whole of a [`Rng::chance`].
 const PERCENT: u64 = 100;
 
-/// SplitMix64 increment and output multipliers.
-const SPLITMIX_GAMMA: u64 = 0x9E37_79B9_7F4A_7C15;
-const SPLITMIX_MUL_1: u64 = 0xBF58_476D_1CE4_E5B9;
-const SPLITMIX_MUL_2: u64 = 0x94D0_49BB_1331_11EB;
-
-/// A SplitMix64 generator: tiny, seeded, and enough to pick moves.
-struct Rng(u64);
+/// The game's seeded generator, with the picks the runs make.
+struct Rng(qix_core::Rng);
 
 impl Rng {
     fn next_u64(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(SPLITMIX_GAMMA);
-        let z = self.0;
-        let z = (z ^ (z >> 30)).wrapping_mul(SPLITMIX_MUL_1);
-        let z = (z ^ (z >> 27)).wrapping_mul(SPLITMIX_MUL_2);
-        z ^ (z >> 31)
+        self.0.next_u64()
     }
 
     /// True with a chance of `percent` in a hundred.
@@ -188,7 +179,7 @@ fn play_game(rng: &mut Rng, check: &impl Fn(&Before, &Game)) -> u32 {
 /// sure each run closed enough stix to have tested something.
 fn for_every_tick(check: impl Fn(&Before, &Game)) {
     for seed in SEEDS {
-        let mut rng = Rng(seed);
+        let mut rng = Rng(qix_core::Rng::new(seed));
         let closes: u32 = (0..GAMES_PER_RUN)
             .map(|_| play_game(&mut rng, &check))
             .sum();

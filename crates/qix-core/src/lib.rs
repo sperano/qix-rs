@@ -12,8 +12,12 @@ pub mod game;
 pub mod geometry;
 pub mod input;
 pub mod marker;
+pub mod qix;
+pub mod rng;
+mod segment;
 pub mod stix;
 pub mod tuning;
+pub mod vec2;
 
 #[cfg(test)]
 mod bitset_test;
@@ -32,7 +36,15 @@ mod input_test;
 #[cfg(test)]
 mod marker_test;
 #[cfg(test)]
+mod qix_test;
+#[cfg(test)]
+mod rng_test;
+#[cfg(test)]
+mod segment_test;
+#[cfg(test)]
 mod stix_test;
+#[cfg(test)]
+mod vec2_test;
 
 pub use bitset::BitSet;
 pub use board::{Board, Cell, DrawKind};
@@ -41,4 +53,7 @@ pub use game::Game;
 pub use geometry::{Dir, Point};
 pub use input::InputState;
 pub use marker::{Marker, MarkerState};
+pub use qix::Qix;
+pub use rng::Rng;
 pub use stix::Stix;
+pub use vec2::Vec2;
