@@ -44,7 +44,8 @@ pub fn paint(painter: &Painter, to_screen: RectTransform, game: &Game) {
     painter.add(claimed_mesh(board, to_screen));
     let border = Stroke::new(BORDER_WIDTH, palette::BORDER);
     painter.extend(border_segments(board).into_iter().map(|(from, to)| {
-        Shape::line_segment([screen(to_screen, from), screen(to_screen, to)], border)
+        let ends = [screen(to_screen, from), screen(to_screen, to)];
+        Shape::line_segment(square_capped(ends, BORDER_WIDTH), border)
     }));
     if let Some(stix) = game.stix() {
         paint_stix(painter, to_screen, stix);
@@ -127,6 +128,15 @@ pub fn diamond(center: Pos2, radius: f32) -> [Pos2; 4] {
         center + vec2(0.0, radius),
         center - vec2(radius, 0.0),
     ]
+}
+
+/// The ends of a line `width` wide from `ends[0]` to `ends[1]`, each pushed
+/// out by half the width. egui ends an open line flush with its end
+/// points, so where two border lines meet at a corner the corner's outer
+/// square would stay unpainted; the extension squares it off.
+pub fn square_capped([from, to]: [Pos2; 2], width: f32) -> [Pos2; 2] {
+    let extension = (to - from).normalized() * (width / 2.0);
+    [from - extension, to + extension]
 }
 
 /// The claimed cells as one mesh of rectangles. A mesh is not

@@ -3,7 +3,9 @@ use std::ops::Range;
 use eframe::egui::{Rect, pos2};
 use qix_core::{Board, Cell, DrawKind, Point, Stix};
 
-use crate::render::board::{CellRun, border_segments, claimed_runs, diamond, stix_runs};
+use crate::render::board::{
+    CellRun, border_segments, claimed_runs, diamond, square_capped, stix_runs,
+};
 
 /// Dimensions of the small board the tests use.
 const W: u16 = 6;
@@ -106,6 +108,14 @@ fn a_claimed_corner_moves_the_border_around_it() {
 fn claimed_cells_of_both_kinds_have_no_border_between_them() {
     let board = board_with(&[(0..H, 0..3, FAST), (0..H, 3..W, SLOW)]);
     assert!(border_segments(&board).is_empty());
+}
+
+#[test]
+fn a_square_cap_extends_a_line_by_half_its_width_at_both_ends() {
+    let horizontal = square_capped([pos2(10.0, 5.0), pos2(30.0, 5.0)], 2.0);
+    assert_eq!(horizontal, [pos2(9.0, 5.0), pos2(31.0, 5.0)]);
+    let vertical = square_capped([pos2(4.0, 20.0), pos2(4.0, 8.0)], 4.0);
+    assert_eq!(vertical, [pos2(4.0, 22.0), pos2(4.0, 6.0)]);
 }
 
 #[test]
