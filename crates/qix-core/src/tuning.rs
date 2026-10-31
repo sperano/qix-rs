@@ -55,3 +55,10 @@ pub const FUSE_DELAY_TICKS: u32 = TICK_HZ / 2;
 /// Ticks the lit fuse takes to burn one segment of the stix towards the
 /// marker.
 pub const FUSE_STEP_TICKS: u32 = 12;
+
+/// Lives at the start of a game (the arcade's default).
+pub const STARTING_LIVES: u32 = 3;
+
+/// Ticks after a death during which the Sparx cannot kill the marker and
+/// the marker cannot draw: two seconds.
+pub const RESPAWN_GRACE_TICKS: u32 = 2 * TICK_HZ;

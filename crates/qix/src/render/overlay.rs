@@ -1,4 +1,5 @@
-//! The debug overlay: the claimed share of the board and the tick count.
+//! The debug overlay: the claimed share of the board, the lives left and
+//! the tick count.
 
 use eframe::egui::{FontId, Painter, Rect, vec2};
 use qix_core::Game;
@@ -24,7 +25,11 @@ const PERCENT: f32 = 100.0;
 /// The overlay's lines for `game`.
 pub fn text(game: &Game) -> String {
     let claimed = game.board().claimed_fraction() * PERCENT;
-    format!("claimed {claimed:.1}%\ntick {}", game.ticks())
+    format!(
+        "claimed {claimed:.1}%\nlives {}\ntick {}",
+        game.lives(),
+        game.ticks()
+    )
 }
 
 /// Paints the overlay in the top left corner of `field`, the playfield on

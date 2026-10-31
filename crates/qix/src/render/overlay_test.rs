@@ -6,8 +6,11 @@ use crate::render::overlay::text;
 const SEED: u64 = 1;
 
 #[test]
-fn a_fresh_game_shows_nothing_claimed_at_tick_zero() {
-    assert_eq!(text(&Game::new(Rng::new(SEED))), "claimed 0.0%\ntick 0");
+fn a_fresh_game_shows_nothing_claimed_and_every_life_at_tick_zero() {
+    assert_eq!(
+        text(&Game::new(Rng::new(SEED))),
+        "claimed 0.0%\nlives 3\ntick 0"
+    );
 }
 
 #[test]
@@ -26,5 +29,5 @@ fn the_overlay_follows_the_claimed_share_and_the_ticks() {
     for _ in 0..ticks {
         game.tick(&InputState::default());
     }
-    assert_eq!(text(&game), "claimed 12.5%\ntick 3");
+    assert_eq!(text(&game), "claimed 12.5%\nlives 3\ntick 3");
 }
