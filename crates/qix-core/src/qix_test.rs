@@ -14,6 +14,20 @@ const SAMPLE_SPACING: f32 = 0.05;
 /// Rounding slack on speeds and lengths.
 const EPSILON: f32 = 1e-4;
 
+/// Ticks of the claimed-area run in which the Qix must touch each claimed
+/// area of [`board_with_claims`], so the run exercises the bounces off them.
+const MIN_TICKS_BESIDE_EACH_CLAIM: u32 = 10;
+
+/// The claimed block in the middle of [`board_with_claims`].
+fn in_block(x: i32, y: i32) -> bool {
+    (60..100).contains(&x) && (40..80).contains(&y)
+}
+
+/// The claimed bottom-left corner of [`board_with_claims`].
+fn in_corner(x: i32, y: i32) -> bool {
+    x < 40 && y >= 80
+}
+
 /// A full-size board with claimed areas the Qix must bounce off: a block
 /// in the middle and the bottom-left corner, as a claim leaves them.
 fn board_with_claims() -> Board {
@@ -21,9 +35,8 @@ fn board_with_claims() -> Board {
     let claimed = Cell::Claimed(DrawKind::Fast);
     for y in 0..BOARD_H {
         for x in 0..BOARD_W {
-            let in_block = (60..100).contains(&x) && (40..80).contains(&y);
-            let in_corner = x < 40 && y >= 80;
-            if in_block || in_corner {
+            let (cx, cy) = (i32::from(x), i32::from(y));
+            if in_block(cx, cy) || in_corner(cx, cy) {
                 board.set_cell(x, y, claimed);
             }
         }
@@ -43,13 +56,38 @@ fn board_cell(board: &Board, point: Vec2) -> Cell {
     board.cell(point.x.floor() as i32, point.y.floor() as i32)
 }
 
+/// Points along the Qix's segment, [`SAMPLE_SPACING`] apart or closer,
+/// both ends included.
+fn sample_points(qix: &Qix) -> impl Iterator<Item = Vec2> {
+    let (a, b) = (qix.a(), qix.b());
+    let samples = ((b - a).length() / SAMPLE_SPACING).ceil() as u32;
+    (0..=samples).map(move |i| a + (b - a) * (i as f32 / samples as f32))
+}
+
+/// Whether a claimed cell of `board` in `area` is next to, on a side or a
+/// corner, the cell under a sampled point of the Qix's segment.
+fn beside(board: &Board, qix: &Qix, area: fn(i32, i32) -> bool) -> bool {
+    let on_board = |x, y| {
+        (0..i32::from(board.width())).contains(&x) && (0..i32::from(board.height())).contains(&y)
+    };
+    let mut cells: Vec<_> = sample_points(qix)
+        .map(|point| (point.x.floor() as i32, point.y.floor() as i32))
+        .collect();
+    cells.dedup();
+    cells.into_iter().any(|(x, y)| {
+        (-1..=1).any(|dy| {
+            (-1..=1).any(|dx| {
+                let (nx, ny) = (x + dx, y + dy);
+                on_board(nx, ny) && area(nx, ny) && board.cell(nx, ny) != Cell::Free
+            })
+        })
+    })
+}
+
 /// Every sampled point of the Qix's segment, and the cell under its
 /// midpoint, is a free cell of `board`.
 fn assert_on_free_cells(board: &Board, qix: &Qix, tick: u32) {
-    let (a, b) = (qix.a(), qix.b());
-    let samples = ((b - a).length() / SAMPLE_SPACING).ceil() as u32;
-    for i in 0..=samples {
-        let point = a + (b - a) * (i as f32 / samples as f32);
+    for point in sample_points(qix) {
         let cell = board_cell(board, point);
         assert_eq!(cell, Cell::Free, "tick {tick}: {point:?} of {qix:?}");
     }
@@ -81,10 +119,21 @@ fn stays_in_free_cells_of_a_fresh_board_over_ten_thousand_ticks() {
 fn stays_in_free_cells_around_claimed_areas_over_ten_thousand_ticks() {
     let board = board_with_claims();
     let mut qix = qix_beside_the_claims();
+    let (mut beside_block, mut beside_corner) = (0, 0);
 
     run(&board, &mut qix, LONG_RUN_TICKS, |qix, tick| {
         assert_on_free_cells(&board, qix, tick);
+        beside_block += u32::from(beside(&board, qix, in_block));
+        beside_corner += u32::from(beside(&board, qix, in_corner));
     });
+    assert!(
+        beside_block >= MIN_TICKS_BESIDE_EACH_CLAIM,
+        "{beside_block}"
+    );
+    assert!(
+        beside_corner >= MIN_TICKS_BESIDE_EACH_CLAIM,
+        "{beside_corner}"
+    );
 }
 
 #[test]
