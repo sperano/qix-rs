@@ -72,9 +72,9 @@ pub fn regions(board: &Board, stix: &Stix, seeds: &[(u16, u16)]) -> Vec<BitSet> 
     let walls = Walls::new(board, stix);
     let mut sets: Vec<BitSet> = Vec::with_capacity(seeds.len());
     for &seed in seeds {
-        let known = sets
-            .iter()
-            .find(|set| is_free(board, seed) && set.contains(cell_index(board, seed)));
+        let known = is_free(board, seed)
+            .then(|| cell_index(board, seed))
+            .and_then(|index| sets.iter().find(|set| set.contains(index)));
         let set = known.cloned().unwrap_or_else(|| flood(board, &walls, seed));
         sets.push(set);
     }
