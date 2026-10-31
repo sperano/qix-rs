@@ -1,8 +1,10 @@
 //! Super Sparx chasing the marker along the stix through [`Game::tick`].
 
 use super::qix_hits::{COLUMN, STEPS_UP, band_and_column, band_and_column_with};
-use super::{SEED, draw, drawing, penned};
-use crate::tuning::{MARKER_STEP_TICKS, SPARX_STEP_TICKS, SUPER_SPARX_STEP_TICKS};
+use super::{SEED, draw, drawing, hold, penned};
+use crate::tuning::{
+    FUSE_DELAY_TICKS, FUSE_STEP_TICKS, MARKER_STEP_TICKS, SPARX_STEP_TICKS, SUPER_SPARX_STEP_TICKS,
+};
 use crate::{DeathCause, Dir, DrawKind, Event, Game, InputState, Point, Rng, Sparx, SparxKind};
 
 /// Dimensions of the board: the marker starts at `(W / 2, H)`.
@@ -30,6 +32,30 @@ const START: Point = Point::new(W / 2, H);
 
 /// Where the marker stands at the head of the stix.
 const HEAD: Point = Point::new(W / 2, H - STIX_STEPS);
+
+/// Steps of the stix the fuse burns in
+/// [`a_sparx_on_the_stix_snaps_to_the_border_on_a_fuse_death`], drawn
+/// straight up: two of its lattice points lie between its start and its
+/// head.
+const FUSE_STIX_STEPS: u32 = 3;
+
+/// Width of that test's board: the bottom edge right of the marker's start
+/// is long enough for the Sparx to reach the stix late.
+const FUSE_W: u16 = 32;
+
+/// The tick the fuse reaches the head: the stix drawn fast, the fuse's
+/// delay, then one fuse step for the stix's one segment.
+const FUSE_DEATH_TICK: u32 =
+    FUSE_STIX_STEPS * MARKER_STEP_TICKS + FUSE_DELAY_TICKS + FUSE_STEP_TICKS;
+
+/// The tick the Sparx steps onto the stix point after the start: it is on
+/// the last point before the head on [`FUSE_DEATH_TICK`], a step short of
+/// the marker.
+const ONTO_STIX_TICK: u32 = FUSE_DEATH_TICK - (FUSE_STIX_STEPS - 2) * SUPER_SPARX_STEP_TICKS;
+
+/// Lattice steps between the marker's start and the Sparx: it reaches the
+/// stix's start on its last border step before [`ONTO_STIX_TICK`].
+const FUSE_GAP: u16 = ((ONTO_STIX_TICK - 1) / SPARX_STEP_TICKS) as u16;
 
 /// A Sparx of `kind` [`GAP`] steps right of the marker on the bottom
 /// edge, heading for it.
@@ -203,6 +229,30 @@ fn a_sparx_on_the_stix_snaps_to_the_border_on_a_qix_death() {
     let before = before_death.expect("the Qix never killed");
     assert_eq!(game.events(), [Event::Death(DeathCause::Qix)]);
     assert!(!game.board().is_border(before.pos), "{before:?}");
+    let sparx = game.sparx()[0];
+    assert!(game.board().is_border(sparx.pos), "{sparx:?}");
+}
+
+#[test]
+fn a_sparx_on_the_stix_snaps_to_the_border_on_a_fuse_death() {
+    let (board, qix) = penned(FUSE_W, H, PEN_COLUMN);
+    let chaser = Sparx {
+        pos: Point::new(FUSE_W / 2 + FUSE_GAP, H),
+        dir: Dir::Left,
+        kind: SparxKind::Super,
+    };
+    let mut game = Game::with_board(board, qix, vec![chaser], Rng::new(SEED));
+    draw(&mut game, Dir::Up, DrawKind::Fast, FUSE_STIX_STEPS);
+    let standing = FUSE_DEATH_TICK - 1 - FUSE_STIX_STEPS * MARKER_STEP_TICKS;
+    hold(&mut game, InputState::default(), standing);
+
+    let before = game.sparx()[0];
+    let stix = game.stix().expect("the marker died before the fuse");
+    assert!(before.chases_along(stix), "{before:?}");
+    assert!(!game.board().is_border(before.pos), "{before:?}");
+    game.tick(&InputState::default());
+
+    assert_eq!(game.events(), [Event::Death(DeathCause::Fuse)]);
     let sparx = game.sparx()[0];
     assert!(game.board().is_border(sparx.pos), "{sparx:?}");
 }
