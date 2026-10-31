@@ -3,6 +3,7 @@ use qix_core::tuning::MARKER_STEP_TICKS;
 use qix_core::tuning::{BOARD_H, BOARD_W};
 use qix_core::{Board, Cell, Dir, DrawKind, Game, InputState, Qix, Rng};
 
+use crate::palette;
 use crate::playfield::{letterbox, playfield_units, show, to_screen};
 
 /// Seed of every game the tests play.
@@ -112,7 +113,10 @@ fn the_playfield_paints_the_claimed_cells_border_and_marker() {
     game.tick(&InputState::default());
     let shapes = painted(&game, false);
     let meshes = count(&shapes, |s| matches!(s, Shape::Mesh(m) if !m.is_empty()));
-    let segments = count(&shapes, |s| matches!(s, Shape::LineSegment { .. }));
+    let segments = count(
+        &shapes,
+        |s| matches!(s, Shape::LineSegment { stroke, .. } if stroke.color == palette::BORDER),
+    );
     let polygons = count(&shapes, |s| matches!(s, Shape::Path(p) if p.closed));
     assert_eq!(meshes, 1, "{shapes:?}");
     // The four sides, cut short by the claimed corner, and its two edges.
