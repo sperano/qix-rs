@@ -1,6 +1,8 @@
+use std::ops::RangeInclusive;
+
 use crate::tuning::{
     BOARD_H, BOARD_W, BONUS_PER_PERCENT, CLAIM_THRESHOLD_DEFAULT, CLAIM_THRESHOLD_RANGE,
-    DIFFICULTY_RAMP_LEVELS, FIRST_LEVEL, LEVEL_SPARX, QIX_SPEED, SPARX_METER_TICKS,
+    DIFFICULTY_RAMP_LEVELS, FIRST_LEVEL, LEVEL_SPARX, QIX_SPEED, SPARX_METER_TICKS, TICK_HZ,
     TWO_QIX_FROM_LEVEL,
 };
 use crate::{ClaimThreshold, LevelConfig};
@@ -17,6 +19,22 @@ const LAST_LEVEL_TESTED: u32 = RAMP_END + DIFFICULTY_RAMP_LEVELS;
 /// Qix of a level before [`TWO_QIX_FROM_LEVEL`], and from it on.
 const ONE_QIX: usize = 1;
 const TWO_QIX: usize = 2;
+
+/// The Sparx of each level of the ramp, from [`FIRST_LEVEL`] to
+/// [`RAMP_END`]: one more every two levels.
+const RAMP_SPARX: [usize; DIFFICULTY_RAMP_LEVELS as usize + 1] = [2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7];
+
+/// The level after the first, and its Qix speeds and meter.
+const SECOND_LEVEL: u32 = FIRST_LEVEL + 1;
+const SECOND_LEVEL_QIX_SPEED: RangeInclusive<f32> = 0.32..=0.82;
+const SECOND_LEVEL_METER_TICKS: u32 = 28 * TICK_HZ;
+
+/// The Qix speeds and the meter at the end of the ramp.
+const RAMP_END_QIX_SPEED: RangeInclusive<f32> = 0.5..=1.0;
+const RAMP_END_METER_TICKS: u32 = 10 * TICK_HZ;
+
+/// Rounding slack on the speeds the ramp adds up.
+const SPEED_EPSILON: f32 = 1e-5;
 
 /// Whole percent points in a board.
 const WHOLE: u32 = 100;
@@ -164,12 +182,40 @@ fn each_level_of_the_ramp_has_faster_qix_and_a_shorter_meter() {
     }
 }
 
-#[test]
-fn the_ramp_adds_sparx() {
+/// `speed` is `expected`, but for rounding.
+fn assert_speed(speed: &RangeInclusive<f32>, expected: &RangeInclusive<f32>, level: u32) {
+    let close = |a: f32, b: f32| (a - b).abs() < SPEED_EPSILON;
     assert!(
-        LevelConfig::for_level(RAMP_END).sparx_count
-            > LevelConfig::for_level(FIRST_LEVEL).sparx_count
+        close(*speed.start(), *expected.start()) && close(*speed.end(), *expected.end()),
+        "level {level}: {speed:?}, not {expected:?}"
     );
+}
+
+#[test]
+fn the_ramp_adds_a_sparx_every_two_levels() {
+    for (level, &sparx) in (FIRST_LEVEL..=RAMP_END).zip(&RAMP_SPARX) {
+        assert_eq!(
+            LevelConfig::for_level(level).sparx_count,
+            sparx,
+            "level {level}"
+        );
+    }
+}
+
+#[test]
+fn the_second_level_is_one_step_up_the_ramp() {
+    let config = LevelConfig::for_level(SECOND_LEVEL);
+
+    assert_speed(&config.qix_speed, &SECOND_LEVEL_QIX_SPEED, SECOND_LEVEL);
+    assert_eq!(config.meter_ticks, SECOND_LEVEL_METER_TICKS);
+}
+
+#[test]
+fn the_end_of_the_ramp_has_the_top_speed_and_the_shortest_meter() {
+    let config = LevelConfig::for_level(RAMP_END);
+
+    assert_speed(&config.qix_speed, &RAMP_END_QIX_SPEED, RAMP_END);
+    assert_eq!(config.meter_ticks, RAMP_END_METER_TICKS);
 }
 
 #[test]

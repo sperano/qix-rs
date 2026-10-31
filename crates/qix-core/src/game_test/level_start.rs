@@ -10,7 +10,7 @@ use crate::tuning::{
 };
 use crate::{
     Board, ClaimThreshold, Dir, DrawKind, Game, InputState, LevelConfig, MarkerState, Point, Rng,
-    Sparx, SparxMeter,
+    Sparx, SparxMeter, Vec2,
 };
 
 /// Levels the set-up tests start: the first, the first with two Qix and
@@ -23,6 +23,9 @@ const LEVELS: [u32; 3] = [
 
 /// The level [`a_played_game`] goes on to.
 const NEXT_LEVEL: u32 = FIRST_LEVEL + 1;
+
+/// Rounding slack on where the Qix start.
+const EPSILON: f32 = 1e-4;
 
 /// Ticks the two-Qix game runs to see both Qix move.
 const RUN_TICKS: u32 = 10;
@@ -97,18 +100,33 @@ fn a_level_below_the_first_starts_the_first() {
     assert_set_up_for(&game, FIRST_LEVEL);
 }
 
+/// The Qix of `game` are centred at `xs`, as fractions of the board's
+/// width, in order, on its middle row.
+fn assert_qix_centred_at(game: &Game, xs: &[f32]) {
+    assert_eq!(game.qix().len(), xs.len());
+    let (width, height) = (f32::from(BOARD_W), f32::from(BOARD_H));
+    for (qix, &x) in game.qix().iter().zip(xs) {
+        let mid = qix.a().midpoint(qix.b());
+        let expected = Vec2::new(width * x, height * 0.5);
+        assert!(
+            (mid - expected).length() < EPSILON,
+            "{mid:?}, not {expected:?}"
+        );
+    }
+}
+
 #[test]
-fn two_qix_start_apart_either_side_of_the_middle() {
+fn a_single_qix_starts_at_the_centre() {
+    assert_qix_centred_at(&new_game(), &[0.5]);
+}
+
+#[test]
+fn two_qix_start_a_third_of_the_way_in_from_either_side() {
     let mut game = new_game();
 
     game.start_level(TWO_QIX_FROM_LEVEL);
 
-    let [left, right] = game.qix() else {
-        panic!("{} Qix", game.qix().len());
-    };
-    let centre = BOARD_W / 2;
-    assert!(left.cell().0 < centre && right.cell().0 > centre);
-    assert_eq!((left.cell().1, right.cell().1), (BOARD_H / 2, BOARD_H / 2));
+    assert_qix_centred_at(&game, &[1.0 / 3.0, 2.0 / 3.0]);
 }
 
 #[test]

@@ -3,7 +3,7 @@
 
 use super::{SEED, draw, penned, walk};
 use crate::tuning::{POINTS_PER_CELL, SLOW_DRAW_FACTOR, STARTING_MULTIPLIER};
-use crate::{Board, Dir, DrawKind, Game, Rng};
+use crate::{Board, Dir, DrawKind, Game, Qix, Rng};
 
 /// Dimensions of the boards: the marker starts at `(W / 2, H)`, and the
 /// stix runs straight along column `W / 2` from one edge to the other.
@@ -30,6 +30,26 @@ fn walled_board(column: u16) -> Board {
 fn game_with_qix_in(column: u16) -> Game {
     let (board, qix) = penned(W, H, column);
     Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED))
+}
+
+/// A game on a free `W x H` board but for the walls of both
+/// [`LEFT_COLUMN`] and [`RIGHT_COLUMN`], with a Qix penned in each: the
+/// left one first in the game's list, or the right one.
+fn game_with_qix_either_side(left_first: bool) -> Game {
+    let (mut board, left) = penned(W, H, LEFT_COLUMN);
+    let (right_walls, right) = penned(W, H, RIGHT_COLUMN);
+    for (x, y) in (0..W).flat_map(|x| (0..H).map(move |y| (x, y))) {
+        let cell = right_walls.cell(i32::from(x), i32::from(y));
+        if cell.is_claimed() {
+            board.set_cell(x, y, cell);
+        }
+    }
+    let qix: Vec<Qix> = if left_first {
+        vec![left, right]
+    } else {
+        vec![right, left]
+    };
+    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
 }
 
 /// Draws the stix up from the marker's start to the top edge.
@@ -167,4 +187,18 @@ fn claims_add_up_in_the_score() {
         game.score().points(),
         (first + second) * POINTS_PER_CELL * STARTING_MULTIPLIER
     );
+}
+
+#[test]
+fn a_stix_between_two_qix_claims_nothing() {
+    for left_first in [true, false] {
+        let mut game = game_with_qix_either_side(left_first);
+        let board = game.board().clone();
+
+        close_from_bottom(&mut game);
+
+        assert_eq!(game.stix(), None, "{left_first}");
+        assert_eq!(game.board(), &board, "{left_first}");
+        assert_eq!(game.score().points(), 0, "{left_first}");
+    }
 }

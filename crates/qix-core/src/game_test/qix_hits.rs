@@ -30,6 +30,12 @@ const FALL_TOP: f32 = 10.0;
 const FALL_LENGTH: f32 = 2.0;
 const FALL_SPEED: f32 = 0.5;
 
+/// A free column at the top of the board, closed off from the rest of
+/// it: [`with_a_penned_qix`]'s other Qix is kept there, clear of every
+/// stix.
+const POCKET_COLUMN: u16 = 2;
+const POCKET_ROWS: u16 = 10;
+
 /// Ticks the tests watch a standing marker or Qix for.
 const WATCH_TICKS: u32 = 60;
 
@@ -66,6 +72,22 @@ pub(super) fn band_and_column_with(sparx: Vec<Sparx>) -> Game {
     let board = board_with(|x, y| y >= H - BAND_ROWS || x == COLUMN);
     let qix = column_qix(f32::from(COLUMN) + 0.5, 0.5, f32::from(H) - 1.0);
     Game::with_board(board, vec![qix], sparx, Rng::new(SEED))
+}
+
+/// [`band_and_column`] with another Qix in a pocket of its own, either
+/// before the column's Qix in the game's list or after it.
+fn with_a_penned_qix(penned_first: bool) -> Game {
+    let pocket = |x, y| x == POCKET_COLUMN && y < POCKET_ROWS;
+    let board = board_with(|x, y| y >= H - BAND_ROWS || x == COLUMN || pocket(x, y));
+    let length = f32::from(POCKET_ROWS) - 1.0;
+    let penned = column_qix(f32::from(POCKET_COLUMN) + 0.5, 0.5, length);
+    let column = column_qix(f32::from(COLUMN) + 0.5, 0.5, f32::from(H) - 1.0);
+    let qix = if penned_first {
+        vec![penned, column]
+    } else {
+        vec![column, penned]
+    };
+    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
 }
 
 /// Ticks `game` `ticks` times with `input` and returns the deaths the
@@ -166,4 +188,19 @@ fn a_qix_next_to_a_marker_on_the_border_does_not_kill() {
     }
 
     assert!(touching_ticks > 0, "the Qix never came near the marker");
+}
+
+#[test]
+fn either_of_two_qix_kills() {
+    for penned_first in [true, false] {
+        let mut game = with_a_penned_qix(penned_first);
+        let start_x = u32::from(game.marker().pos.x);
+        let past_column = u32::from(COLUMN) + 1 - start_x;
+
+        let raised = draw_up_then_right(&mut game, past_column);
+
+        assert_eq!(raised, [Event::Death(DeathCause::Qix)], "{penned_first}");
+        let penned = &game.qix()[usize::from(!penned_first)];
+        assert!(penned.a().y < f32::from(POCKET_ROWS), "{penned:?} left");
+    }
 }
