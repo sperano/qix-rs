@@ -43,3 +43,6 @@ pub const QIX_TRAIL_LEN: usize = 32;
 /// Half the side of the square around a drawing marker that the Qix kills
 /// it in, in playfield units.
 pub const MARKER_HIT_HALF_SIZE: f32 = 0.5;
+
+/// Ticks between two lattice steps of a Sparx along the border.
+pub const SPARX_STEP_TICKS: u32 = 3;

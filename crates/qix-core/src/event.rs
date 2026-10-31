@@ -12,4 +12,6 @@ pub enum Event {
 pub enum DeathCause {
     /// The Qix touched the stix or the drawing marker.
     Qix,
+    /// A Sparx reached the marker.
+    Sparx,
 }

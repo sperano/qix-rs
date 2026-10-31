@@ -17,6 +17,7 @@ pub mod marker;
 pub mod qix;
 pub mod rng;
 mod segment;
+pub mod sparx;
 pub mod stix;
 pub mod tuning;
 pub mod vec2;
@@ -46,6 +47,8 @@ mod rng_test;
 #[cfg(test)]
 mod segment_test;
 #[cfg(test)]
+mod sparx_test;
+#[cfg(test)]
 mod stix_test;
 #[cfg(test)]
 mod vec2_test;
@@ -60,5 +63,6 @@ pub use input::InputState;
 pub use marker::{Marker, MarkerState};
 pub use qix::Qix;
 pub use rng::Rng;
+pub use sparx::{Sparx, SparxKind};
 pub use stix::Stix;
 pub use vec2::Vec2;

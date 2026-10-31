@@ -45,4 +45,16 @@ impl Rng {
     pub fn range_f32(&mut self, low: f32, high: f32) -> f32 {
         low + (high - low) * self.next_f32()
     }
+
+    /// A uniform index in `[0, len)`, from the high bits of a random
+    /// `u64` scaled by `len` (Lemire's multiply-shift).
+    ///
+    /// # Panics
+    ///
+    /// If `len` is zero.
+    pub fn below(&mut self, len: usize) -> usize {
+        assert!(len > 0, "no index below zero");
+        let scaled = u128::from(self.next_u64()) * len as u128;
+        (scaled >> u64::BITS) as usize
+    }
 }

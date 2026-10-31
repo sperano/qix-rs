@@ -52,7 +52,7 @@ fn column_qix(x: f32, top: f32, length: f32) -> Qix {
 fn band_and_column() -> Game {
     let board = board_with(|x, y| y >= H - BAND_ROWS || x == COLUMN);
     let qix = column_qix(f32::from(COLUMN) + 0.5, 0.5, f32::from(H) - 1.0);
-    Game::with_board(board, qix, Rng::new(SEED))
+    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
 }
 
 /// Ticks `game` `ticks` times with `input` and returns the deaths raised.
@@ -119,7 +119,7 @@ fn a_qix_next_to_a_marker_on_the_border_does_not_kill() {
     let board = board_with(|x, _| x == column);
     let length = f32::from(H) - 0.5;
     let qix = column_qix(f32::from(column) + 0.25, 0.25, length);
-    let mut game = Game::with_board(board, qix, Rng::new(SEED));
+    let mut game = Game::with_board(board, qix, Vec::new(), Rng::new(SEED));
     let mut touching_ticks = 0;
 
     for _ in 0..WATCH_TICKS {
