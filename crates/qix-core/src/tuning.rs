@@ -1,5 +1,7 @@
 //! Gameplay tuning values, kept in one place so they can be adjusted by play.
 
+use std::ops::RangeInclusive;
+
 /// Core ticks per second: every [`crate::Game::tick`] advances the game by
 /// `1 / TICK_HZ` seconds.
 pub const TICK_HZ: u32 = 60;
@@ -17,3 +19,23 @@ pub const MARKER_STEP_TICKS: u32 = 2;
 /// Ticks between two lattice steps of the marker drawing a slow stix: half
 /// the speed of a fast one, which steps every [`MARKER_STEP_TICKS`].
 pub const SLOW_STEP_TICKS: u32 = 2 * MARKER_STEP_TICKS;
+
+/// Length of the Qix's segment, in playfield units.
+pub const QIX_LENGTH: f32 = 16.0;
+
+/// The speed of the Qix's midpoint, in playfield units per tick: random
+/// jitter changes it, within these bounds.
+pub const QIX_SPEED: RangeInclusive<f32> = 0.3..=0.8;
+
+/// The most the Qix's velocity changes by in one tick, on each axis, in
+/// playfield units per tick.
+pub const QIX_JITTER: f32 = 0.05;
+
+/// The fastest the Qix turns, in radians per tick either way.
+pub const QIX_MAX_SPIN: f32 = 0.05;
+
+/// The most the Qix's spin changes by in one tick, in radians per tick.
+pub const QIX_SPIN_JITTER: f32 = 0.005;
+
+/// Segments in the Qix's trail, its current one included: one per tick.
+pub const QIX_TRAIL_LEN: usize = 32;
