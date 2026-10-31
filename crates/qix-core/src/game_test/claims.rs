@@ -15,6 +15,11 @@ const H: u16 = 10;
 const LEFT_COLUMN: u16 = 3;
 const RIGHT_COLUMN: u16 = 16;
 
+/// The lattice column of the second stix of
+/// [`claims_add_up_in_the_score`]: between the Qix's column and the first
+/// stix, on the side the first claim left free.
+const SECOND_STIX_X: u16 = 7;
+
 /// A free `W x H` board but for the walls of `column`.
 fn walled_board(column: u16) -> Board {
     penned(W, H, column).0
@@ -142,5 +147,24 @@ fn a_slow_claim_scores_the_slow_draw_factor_times_more() {
     assert_eq!(
         points,
         cells * POINTS_PER_CELL * STARTING_MULTIPLIER * SLOW_DRAW_FACTOR
+    );
+}
+
+#[test]
+fn claims_add_up_in_the_score() {
+    let mut game = game_with_qix_in(LEFT_COLUMN);
+    let before = claimed_count(game.board());
+    close_from_bottom(&mut game);
+    let first = claimed_count(game.board()) - before;
+
+    walk(&mut game, Dir::Left, u32::from(W / 2 - SECOND_STIX_X));
+    draw(&mut game, Dir::Down, DrawKind::Fast, u32::from(H));
+
+    assert_eq!(game.stix(), None);
+    let second = claimed_count(game.board()) - before - first;
+    assert!(first > 0 && second > 0);
+    assert_eq!(
+        game.score().points(),
+        (first + second) * POINTS_PER_CELL * STARTING_MULTIPLIER
     );
 }

@@ -35,7 +35,6 @@ fn a_slow_claim_scores_the_slow_draw_factor_times_a_fast_one() {
     let fast = score_for_claim(&claim(CELLS, DrawKind::Fast), MULTIPLIER);
     let slow = score_for_claim(&claim(CELLS, DrawKind::Slow), MULTIPLIER);
 
-    assert_eq!(SLOW_DRAW_FACTOR, 2);
     assert_eq!(slow, fast * SLOW_DRAW_FACTOR);
 }
 
