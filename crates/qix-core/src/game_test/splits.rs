@@ -119,6 +119,16 @@ fn a_split_raises_the_multiplier_by_one() {
 }
 
 #[test]
+fn a_split_raises_a_raised_multiplier_by_one() {
+    let mut game = sides_game();
+    game.set_multiplier(STARTING_MULTIPLIER + 1);
+
+    close_up_the_middle(&mut game);
+
+    assert_eq!(game.multiplier(), STARTING_MULTIPLIER + 2);
+}
+
+#[test]
 fn a_claim_keeping_both_qix_together_is_no_split() {
     let mut game = two_qix_game([PEN_COLUMN, SECOND_PEN_COLUMN]);
 

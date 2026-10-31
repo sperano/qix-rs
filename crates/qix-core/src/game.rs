@@ -116,8 +116,9 @@ impl Game {
     /// [`RESPAWN_GRACE_TICKS`] ticks after it, the Sparx cannot kill and
     /// the marker cannot draw. A death also resets the Sparx meter.
     ///
-    /// A claim that completes the level (see [`Game::is_level_complete`])
-    /// ends the tick: nothing moves after it.
+    /// A stix that completes the level (a claim reaching the threshold,
+    /// or a split; see [`Game::is_level_complete`]) ends the tick: nothing
+    /// moves after it.
     pub fn tick(&mut self, input: &InputState) {
         self.events.clear();
         if self.is_over() || self.level_complete {
