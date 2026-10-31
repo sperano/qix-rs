@@ -28,13 +28,28 @@ impl Sparx {
     /// point nearest the centre of `board`'s top edge, one heading left
     /// and the other right.
     pub fn spawn_pair(board: &Board) -> [Self; 2] {
-        let top_centre = Point::new(board.width() / 2, 0);
-        let pos = nearest_border_point(board, top_centre).unwrap_or(top_centre);
+        let pos = top_centre(board);
         [Dir::Left, Dir::Right].map(|dir| Self {
             pos,
             dir,
             kind: SparxKind::Normal,
         })
+    }
+
+    /// `count` [`SparxKind::Normal`] Sparx on the border point nearest the
+    /// centre of `board`'s top edge, like [`Sparx::spawn_pair`]: heading
+    /// left and right in turn, the first left.
+    pub fn spawn_at_top(board: &Board, count: usize) -> impl Iterator<Item = Self> {
+        let pos = top_centre(board);
+        [Dir::Left, Dir::Right]
+            .into_iter()
+            .cycle()
+            .take(count)
+            .map(move |dir| Self {
+                pos,
+                dir,
+                kind: SparxKind::Normal,
+            })
     }
 
     /// Moves one step along a border edge of `board`: straight on when it
@@ -94,6 +109,13 @@ where
         choices => rng.below(choices),
     };
     sideways().nth(choice)
+}
+
+/// The border point of `board` nearest the centre of its top edge, or
+/// that centre when the board has no border.
+fn top_centre(board: &Board) -> Point {
+    let centre = Point::new(board.width() / 2, 0);
+    nearest_border_point(board, centre).unwrap_or(centre)
 }
 
 /// The border point of `board` the fewest lattice steps (the Manhattan
