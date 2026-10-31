@@ -1,9 +1,14 @@
 use eframe::egui::{self, Color32, Pos2, Rect, Shape, pos2, vec2};
-use qix_core::tuning::{BOARD_W, STARTING_LIVES};
-use qix_core::{Board, Cell, ClaimThreshold, DrawKind, Game, MeterExpiry, Qix, Rng, SparxMeter};
+use qix_core::tuning::{BOARD_W, MARKER_STEP_TICKS, MAX_MULTIPLIER, STARTING_LIVES};
+use qix_core::{
+    Board, Cell, ClaimThreshold, Dir, DrawKind, Game, InputState, MeterExpiry, Qix, Rng,
+    SparxMeter, Vec2,
+};
 
 use crate::palette;
+use crate::playfield::{WINDOW_MARGIN, letterbox};
 use crate::render::hud::{self, Hud, MAX_LIFE_MARKERS, Meter, column_rects, hud};
+use crate::{DEFAULT_WINDOW_SIZE, MIN_WINDOW_SIZE};
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1207;
@@ -11,18 +16,43 @@ const SEED: u64 = 1207;
 /// Ticks of the meter the tests count down.
 const METER_TICKS: u32 = 4;
 
-/// Widths of the strips the tests paint, in points: the default window's
-/// and the smallest window's.
-const STRIP_WIDTHS: [f32; 2] = [944.0, 320.0];
+/// Inner sizes of the windows whose strips the tests paint, in points:
+/// the default window and the smallest one.
+const WINDOW_SIZES: [[f32; 2]; 2] = [DEFAULT_WINDOW_SIZE, MIN_WINDOW_SIZE];
 
 /// Tolerance for comparing screen coordinates, in points.
 const EPSILON: f32 = 1e-3;
+
+/// The cells the stix of [`scored_game`] claims: at [`MAX_MULTIPLIER`],
+/// more than a thousand points.
+const SCORED_CELLS: u16 = 14;
+
+/// Columns of the strip, left to right.
+const SCORE_COLUMN: usize = 0;
+const HIGH_SCORE_COLUMN: usize = 1;
+const LEVEL_COLUMN: usize = 2;
+const LIVES_COLUMN: usize = 3;
+const CLAIMED_COLUMN: usize = 4;
+const METER_COLUMN: usize = 5;
+const MULTIPLIER_COLUMN: usize = 6;
 
 /// The strip `width` points wide, at the HUD's height for a playfield
 /// that wide.
 fn strip(width: f32) -> Rect {
     let height = width * hud::HEIGHT / f32::from(BOARD_W);
     Rect::from_min_size(pos2(10.0, 20.0), vec2(width, height))
+}
+
+/// The strip of a window of inner size `window`: as wide as the
+/// playfield letterboxed inside the panel's margins.
+fn window_strip(window: [f32; 2]) -> Rect {
+    let panel = Rect::from_min_size(Pos2::ZERO, window.into()).shrink(WINDOW_MARGIN);
+    strip(letterbox(panel).width())
+}
+
+/// The strip of the default window.
+fn default_strip() -> Rect {
+    window_strip(DEFAULT_WINDOW_SIZE)
 }
 
 /// A game on a `width x 1` board with its first `claimed` cells claimed.
@@ -34,6 +64,36 @@ fn claimed_game(width: u16, claimed: u16) -> Game {
     let mut rng = Rng::new(SEED);
     let qix = Qix::spawn(&board, &mut rng);
     Game::with_board(board, vec![qix], Vec::new(), rng)
+}
+
+/// A game at [`MAX_MULTIPLIER`] on a `2 * SCORED_CELLS x 2` board with
+/// a still Qix in its bottom-right cell, that drew a fast stix up and
+/// left from the marker's start, claiming the [`SCORED_CELLS`] cells of
+/// the bottom row's left half.
+fn scored_game() -> Game {
+    let (width, height) = (2 * SCORED_CELLS, 2);
+    let qix_x = f32::from(width) - 0.5;
+    let qix = Qix::new(
+        Vec2::new(qix_x - 0.25, 1.5),
+        Vec2::new(qix_x + 0.25, 1.5),
+        Vec2::default(),
+        0.0,
+    );
+    let board = Board::new(width, height);
+    let mut game = Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED));
+    game.set_multiplier(MAX_MULTIPLIER);
+    for (dir, steps) in [(Dir::Up, 1), (Dir::Left, u32::from(SCORED_CELLS))] {
+        let input = InputState {
+            dir: Some(dir),
+            fast: true,
+            ..InputState::default()
+        };
+        for _ in 0..steps * MARKER_STEP_TICKS {
+            game.tick(&input);
+        }
+    }
+    assert_eq!(game.stix(), None, "the stix did not close");
+    game
 }
 
 /// A HUD whose every value is as wide as a game makes it.
@@ -73,6 +133,19 @@ fn texts(shapes: &[Shape]) -> Vec<String> {
         _ => None,
     });
     galleys.collect()
+}
+
+/// The column of `strip` that holds the text `text` painted among
+/// `shapes`, if it is painted inside one.
+fn column_of(shapes: &[Shape], strip: Rect, text: &str) -> Option<usize> {
+    let bounds = shapes.iter().find_map(|shape| match shape {
+        Shape::Text(shown) if shown.galley.text() == text => Some(shape.visual_bounding_rect()),
+        _ => None,
+    })?;
+    let columns = column_rects(strip);
+    columns
+        .iter()
+        .position(|column| column.expand(EPSILON).contains_rect(bounds))
 }
 
 fn polygons(shapes: &[Shape]) -> usize {
@@ -125,6 +198,20 @@ fn the_claimed_share_is_rounded_down_to_a_tenth() {
 }
 
 #[test]
+fn a_claimed_share_on_a_tenth_shows_that_tenth() {
+    // 0.7 and 0.9 as `f32` lie a hair below the tenth.
+    assert_eq!(hud(&claimed_game(10, 7), 0).claimed, "70.0% / 75%");
+    assert_eq!(hud(&claimed_game(10, 9), 0).claimed, "90.0% / 75%");
+}
+
+#[test]
+fn the_score_has_thousands_separators() {
+    let game = scored_game();
+    assert_eq!(game.score().points(), 1_260);
+    assert_eq!(hud(&game, 0).score, "1,260");
+}
+
+#[test]
 fn the_claimed_share_is_shown_against_the_game_s_threshold() {
     let mut game = claimed_game(4, 1);
     game.set_claim_threshold(ClaimThreshold::new(0.5));
@@ -165,20 +252,55 @@ fn the_meter_shrinks_twice_then_is_spent() {
 fn each_field_is_named_and_the_multiplier_only_when_shown() {
     let game = Game::new(Rng::new(SEED));
     let names = ["SCORE", "HIGH SCORE", "LEVEL", "LIVES", "CLAIMED", "SPARX"];
-    let shapes = painted(&hud(&game, 0), strip(STRIP_WIDTHS[0]));
+    let shapes = painted(&hud(&game, 0), default_strip());
     let shown = texts(&shapes);
     for name in names {
         assert!(shown.contains(&name.to_owned()), "{name}: {shown:?}");
     }
     assert!(!shown.contains(&"MULTIPLIER".to_owned()), "{shown:?}");
-    let shown = texts(&painted(&widest_hud(), strip(STRIP_WIDTHS[0])));
+    let shown = texts(&painted(&widest_hud(), default_strip()));
     assert!(shown.contains(&"MULTIPLIER".to_owned()), "{shown:?}");
+}
+
+#[test]
+fn each_value_is_painted_in_its_own_column() {
+    let lives = MAX_LIFE_MARKERS + 2;
+    let hud = Hud {
+        score: "S1".to_owned(),
+        high_score: "H2".to_owned(),
+        level: "L3".to_owned(),
+        lives,
+        claimed: "C4".to_owned(),
+        meter: Meter {
+            fraction: 0.5,
+            next: Some(MeterExpiry::Release),
+        },
+        multiplier: Some("x5".to_owned()),
+    };
+    let strip = default_strip();
+    let shapes = painted(&hud, strip);
+    let lives = format!("x{lives}");
+    let expected = [
+        ("S1", SCORE_COLUMN),
+        ("H2", HIGH_SCORE_COLUMN),
+        ("L3", LEVEL_COLUMN),
+        (lives.as_str(), LIVES_COLUMN),
+        ("C4", CLAIMED_COLUMN),
+        ("x5", MULTIPLIER_COLUMN),
+    ];
+    for (text, column) in expected {
+        assert_eq!(column_of(&shapes, strip, text), Some(column), "{text}");
+    }
+    let [fill] = filled(&shapes, palette::SPARX)[..] else {
+        panic!("{shapes:?}");
+    };
+    assert!(column_rects(strip)[METER_COLUMN].contains_rect(fill));
 }
 
 #[test]
 fn each_life_is_a_marker() {
     let hud = hud(&Game::new(Rng::new(SEED)), 0);
-    let shapes = painted(&hud, strip(STRIP_WIDTHS[0]));
+    let shapes = painted(&hud, default_strip());
     assert_eq!(polygons(&shapes), STARTING_LIVES as usize);
 }
 
@@ -187,7 +309,7 @@ fn as_many_markers_as_lives_up_to_the_most_shown() {
     let mut hud = widest_hud();
     for lives in 0..=MAX_LIFE_MARKERS {
         hud.lives = lives;
-        let shapes = painted(&hud, strip(STRIP_WIDTHS[0]));
+        let shapes = painted(&hud, default_strip());
         assert_eq!(polygons(&shapes), lives as usize);
     }
 }
@@ -195,21 +317,23 @@ fn as_many_markers_as_lives_up_to_the_most_shown() {
 #[test]
 fn more_lives_show_as_one_marker_and_their_count() {
     let hud = widest_hud();
-    let shapes = painted(&hud, strip(STRIP_WIDTHS[0]));
+    let shapes = painted(&hud, default_strip());
     assert_eq!(polygons(&shapes), 1);
     let count = format!("x{}", hud.lives);
     assert!(texts(&shapes).contains(&count), "{count}");
 }
 
-#[test]
-fn the_meter_fills_its_share_of_the_bar_in_the_colour_of_its_expiry() {
+/// Paints the meter half way through the countdown to `next` and checks
+/// that it fills the left half of its outline in `colour` and nothing in
+/// `other`.
+fn assert_half_meter(next: MeterExpiry, colour: Color32, other: Color32) {
     let mut hud = widest_hud();
     hud.meter = Meter {
         fraction: 0.5,
-        next: Some(MeterExpiry::Release),
+        next: Some(next),
     };
-    let shapes = painted(&hud, strip(STRIP_WIDTHS[0]));
-    let fills = filled(&shapes, palette::meter(MeterExpiry::Release));
+    let shapes = painted(&hud, default_strip());
+    let fills = filled(&shapes, colour);
     let [fill] = fills[..] else {
         panic!("{shapes:?}");
     };
@@ -220,6 +344,17 @@ fn the_meter_fills_its_share_of_the_bar_in_the_colour_of_its_expiry() {
     let frame = frame.expect("no outline");
     assert!((fill.width() - frame.width() / 2.0).abs() < EPSILON);
     assert!((fill.left() - frame.left()).abs() < EPSILON);
+    assert!(filled(&shapes, other).is_empty(), "{shapes:?}");
+}
+
+#[test]
+fn the_meter_fills_its_share_of_the_bar_in_sparx_red_before_the_release() {
+    assert_half_meter(MeterExpiry::Release, palette::SPARX, palette::SUPER_SPARX);
+}
+
+#[test]
+fn the_meter_fills_its_share_of_the_bar_in_super_sparx_green_after_it() {
+    assert_half_meter(MeterExpiry::Super, palette::SUPER_SPARX, palette::SPARX);
 }
 
 #[test]
@@ -229,16 +364,17 @@ fn a_spent_meter_is_an_empty_bar() {
         fraction: 0.0,
         next: None,
     };
-    let shapes = painted(&hud, strip(STRIP_WIDTHS[0]));
-    for expiry in [MeterExpiry::Release, MeterExpiry::Super] {
-        assert!(filled(&shapes, palette::meter(expiry)).is_empty());
+    let shapes = painted(&hud, default_strip());
+    for colour in [palette::SPARX, palette::SUPER_SPARX] {
+        assert!(filled(&shapes, colour).is_empty());
     }
 }
 
 #[test]
 fn the_widest_values_fit_their_columns_at_every_size() {
-    for width in STRIP_WIDTHS {
-        let strip = strip(width);
+    for window in WINDOW_SIZES {
+        let strip = window_strip(window);
+        let width = strip.width();
         let columns = column_rects(strip);
         for shape in painted(&widest_hud(), strip) {
             let bounds = shape.visual_bounding_rect();
@@ -256,7 +392,7 @@ fn the_widest_values_fit_their_columns_at_every_size() {
 
 #[test]
 fn the_columns_span_the_strip_side_by_side() {
-    let strip = strip(STRIP_WIDTHS[0]);
+    let strip = default_strip();
     let columns = column_rects(strip);
     let mut left: Pos2 = strip.left_top();
     for column in columns {

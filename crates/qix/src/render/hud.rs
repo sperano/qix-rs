@@ -62,6 +62,12 @@ const PERCENT: f64 = 100.0;
 /// Tenths in one, to show percentages to a tenth.
 const TENTHS: f64 = 10.0;
 
+/// Tenths of a percent added before rounding the claimed share down:
+/// absorbs the `f32` rounding of a share lying on a tenth, such as 70 %
+/// stored a hair below `0.7`, yet stays well under the share of one cell
+/// of a full board.
+const TENTHS_ROUNDING_SLACK: f64 = 1e-4;
+
 /// What the HUD shows of one game, as text where it is text.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Hud {
@@ -113,7 +119,7 @@ pub fn hud(game: &Game, high_score: u32) -> Hud {
 /// before the board reaches it.
 fn claimed(game: &Game) -> String {
     let fraction = f64::from(game.board().claimed_fraction());
-    let tenths = (fraction * PERCENT * TENTHS).floor() / TENTHS;
+    let tenths = (fraction * PERCENT * TENTHS + TENTHS_ROUNDING_SLACK).floor() / TENTHS;
     let threshold = f64::from(game.claim_threshold().fraction()) * PERCENT;
     format!("{tenths:.1}% / {threshold:.0}%")
 }

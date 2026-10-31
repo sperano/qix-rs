@@ -12,7 +12,7 @@ use crate::render::screen::Screen;
 
 /// Gap between the window edge and the playfield, in points; wider than
 /// the half of the border lines that lies outside the playfield.
-const WINDOW_MARGIN: f32 = 8.0;
+pub const WINDOW_MARGIN: f32 = 8.0;
 
 /// The frame of the panel holding the playfield.
 pub fn panel_frame() -> Frame {

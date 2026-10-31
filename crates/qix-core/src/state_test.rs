@@ -1,5 +1,7 @@
 use crate::qix_test::qix_at;
-use crate::tuning::{BONUS_PER_PERCENT, FIRST_LEVEL, MARKER_STEP_TICKS, STARTING_LIVES};
+use crate::tuning::{
+    BONUS_PER_PERCENT, CLAIM_THRESHOLD_RANGE, FIRST_LEVEL, MARKER_STEP_TICKS, STARTING_LIVES,
+};
 use crate::{
     Board, Cell, ClaimThreshold, Dir, DrawKind, Event, Game, GameState, InputState, Point, Rng,
     Session, Sparx, SparxKind,
@@ -397,6 +399,24 @@ fn the_high_score_follows_the_score_of_the_game_played() {
 
     let points = session.game().score().points();
     assert!(points > 0, "the level scored nothing");
+    assert_eq!(session.high_score(), points);
+}
+
+#[test]
+fn the_high_score_rises_during_play() {
+    let mut game = level_game();
+    game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.end()));
+    let mut session = playing(game);
+    for _ in 0..u32::from(H) * MARKER_STEP_TICKS {
+        session.tick(&DRAW_UP);
+        if session.game().score().points() > 0 {
+            break;
+        }
+    }
+
+    let points = session.game().score().points();
+    assert!(points > 0, "the stix scored nothing");
+    assert_eq!(session.state(), GameState::Playing);
     assert_eq!(session.high_score(), points);
 }
 

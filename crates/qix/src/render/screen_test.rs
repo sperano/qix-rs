@@ -262,6 +262,14 @@ fn game_over_shows_the_final_score() {
 }
 
 #[test]
+fn the_final_score_has_thousands_separators() {
+    let session = completed_level(level_game(), LEVEL_H);
+    let game = session.game();
+    assert_eq!(game.score().points(), 25_120);
+    assert_eq!(game_over(game).lines[0], "Final score 25,120");
+}
+
+#[test]
 fn a_completed_level_shows_its_claim_and_bonus() {
     let session = completed_level(level_game(), LEVEL_H);
     let (shown, expected) = level_screens(&session);
