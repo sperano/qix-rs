@@ -2,6 +2,7 @@
 //! free.
 
 use super::{SEED, draw, penned, walk};
+use crate::tuning::{POINTS_PER_CELL, SLOW_DRAW_FACTOR, STARTING_MULTIPLIER};
 use crate::{Board, Dir, DrawKind, Game, Rng};
 
 /// Dimensions of the boards: the marker starts at `(W / 2, H)`, and the
@@ -100,4 +101,46 @@ fn a_qix_right_of_a_stix_drawn_from_the_top_keeps_the_right() {
 
     assert_eq!(game.stix(), None);
     assert_qix_side_kept(&game, RIGHT_COLUMN);
+}
+
+/// The cells of `board` that are claimed.
+fn claimed_count(board: &Board) -> u32 {
+    let cells = (0..H).flat_map(|y| (0..W).map(move |x| (i32::from(x), i32::from(y))));
+    let claimed = cells
+        .filter(|&(x, y)| board.cell(x, y).is_claimed())
+        .count();
+    u32::try_from(claimed).unwrap()
+}
+
+/// The cells the stix up from the bottom claims, drawn `kind`, in a game
+/// with the Qix left of it, and the points the game scores for them.
+fn claim_from_bottom(kind: DrawKind) -> (u32, u32) {
+    let mut game = game_with_qix_in(LEFT_COLUMN);
+    let before = claimed_count(game.board());
+    assert_eq!(game.score().points(), 0);
+
+    draw(&mut game, Dir::Up, kind, u32::from(H));
+
+    assert_eq!(game.stix(), None);
+    let cells = claimed_count(game.board()) - before;
+    (cells, game.score().points())
+}
+
+#[test]
+fn a_fast_claim_scores_its_cells_at_the_starting_multiplier() {
+    let (cells, points) = claim_from_bottom(DrawKind::Fast);
+
+    assert!(cells > 0);
+    assert_eq!(points, cells * POINTS_PER_CELL * STARTING_MULTIPLIER);
+}
+
+#[test]
+fn a_slow_claim_scores_the_slow_draw_factor_times_more() {
+    let (cells, points) = claim_from_bottom(DrawKind::Slow);
+
+    assert!(cells > 0);
+    assert_eq!(
+        points,
+        cells * POINTS_PER_CELL * STARTING_MULTIPLIER * SLOW_DRAW_FACTOR
+    );
 }
