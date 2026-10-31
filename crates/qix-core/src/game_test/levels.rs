@@ -96,7 +96,8 @@ fn a_claim_exactly_at_the_threshold_completes_the_level() {
     assert_eq!(
         game.events(),
         [Event::LevelComplete {
-            fraction: FRACTION_AFTER
+            fraction: FRACTION_AFTER,
+            split: false,
         }]
     );
     let claim_points = STIX_CLAIM_CELLS * POINTS_PER_CELL;
@@ -184,7 +185,8 @@ fn nothing_moves_after_the_completing_claim_in_its_tick() {
     assert_eq!(
         game.events(),
         [Event::LevelComplete {
-            fraction: FRACTION_AFTER
+            fraction: FRACTION_AFTER,
+            split: false,
         }]
     );
     assert_eq!((game.qix(), game.sparx()), (&last.0[..], &last.1[..]));

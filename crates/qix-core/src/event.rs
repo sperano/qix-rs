@@ -9,10 +9,14 @@ pub enum Event {
     /// [`Event::Death`]: the game no longer ticks.
     GameOver,
     /// A claim took the board to the claim threshold or above, and the
-    /// level bonus was scored: the game no longer ticks.
+    /// level bonus was scored, or a stix split the Qix apart, which
+    /// scores no bonus but raises the multiplier: the game no longer
+    /// ticks.
     LevelComplete {
         /// The board's claimed fraction after the claim, from 0 to 1.
         fraction: f32,
+        /// The stix left the Qix in different free areas.
+        split: bool,
     },
 }
 

@@ -9,6 +9,7 @@ mod levels;
 mod qix_hits;
 mod sparx_hits;
 mod sparx_meter;
+mod splits;
 mod super_sparx;
 
 /// Seed of every game the tests play.
@@ -51,6 +52,14 @@ fn small_game(board: Board) -> Game {
 /// of the board through the first and last rows.
 pub(crate) fn penned(width: u16, height: u16, column: u16) -> (Board, Qix) {
     let mut board = Board::new(width, height);
+    let qix = pen(&mut board, column);
+    (board, qix)
+}
+
+/// Claims the walls of a [`penned`] column on `board` and returns the
+/// Qix it keeps.
+pub(crate) fn pen(board: &mut Board, column: u16) -> Qix {
+    let (width, height) = (board.width(), board.height());
     for y in 1..height - 1 {
         for x in [column.checked_sub(1), Some(column + 1)]
             .into_iter()
@@ -63,13 +72,12 @@ pub(crate) fn penned(width: u16, height: u16, column: u16) -> (Board, Qix) {
     }
     let x = f32::from(column) + 0.5;
     let (top, bottom) = (0.5, f32::from(height) - 1.5);
-    let qix = Qix::new(
+    Qix::new(
         Vec2::new(x, top),
         Vec2::new(x, bottom),
         Vec2::default(),
         0.0,
-    );
-    (board, qix)
+    )
 }
 
 fn holding(dir: Dir) -> InputState {
