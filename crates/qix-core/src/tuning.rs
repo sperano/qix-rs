@@ -71,3 +71,15 @@ pub const SLOW_DRAW_FACTOR: u32 = 2;
 
 /// The level multiplier a game starts with.
 pub const STARTING_MULTIPLIER: u32 = 1;
+
+/// The claimed fraction of the board that completes a level, unless the
+/// settings change it.
+pub const CLAIM_THRESHOLD_DEFAULT: f32 = 0.75;
+
+/// The claim thresholds the settings may choose from; others are clamped
+/// into it.
+pub const CLAIM_THRESHOLD_RANGE: RangeInclusive<f32> = 0.50..=0.90;
+
+/// Points of the level bonus for each whole percent point of the board
+/// claimed above the threshold.
+pub const BONUS_PER_PERCENT: u32 = 1000;

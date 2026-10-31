@@ -3,9 +3,10 @@
 //! simulation harness brings `proptest`.
 
 use qix_core::stix::legal_moves;
-use qix_core::tuning::SLOW_STEP_TICKS;
+use qix_core::tuning::{CLAIM_THRESHOLD_RANGE, SLOW_STEP_TICKS};
 use qix_core::{
-    Board, Dir, DrawKind, Event, Game, InputState, MarkerState, Qix, Sparx, Stix, Vec2,
+    Board, ClaimThreshold, Dir, DrawKind, Event, Game, InputState, MarkerState, Qix, Sparx, Stix,
+    Vec2,
 };
 
 /// Dimensions of the board the runs play on: small, so that random stix
@@ -180,23 +181,27 @@ fn play(game: &mut Game, step: Move, check: &impl Fn(&Before, &Game)) -> bool {
 }
 
 /// A game on a fresh `W x H` board, with a Qix one unit long at its
-/// centre and the two Sparx of a level start.
+/// centre, the two Sparx of a level start and the highest claim
+/// threshold, so the runs claim as much as they can before the level is
+/// complete.
 fn new_game() -> Game {
     let board = Board::new(W, H);
     let centre = Vec2::new(f32::from(W), f32::from(H)) * 0.5;
     let half = Vec2::new(0.5, 0.0);
     let qix = Qix::new(centre - half, centre + half, Vec2::default(), 0.0);
     let sparx = Sparx::spawn_pair(&board).to_vec();
-    Game::with_board(board, qix, sparx, qix_core::Rng::new(QIX_SEED))
+    let mut game = Game::with_board(board, qix, sparx, qix_core::Rng::new(QIX_SEED));
+    game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.end()));
+    game
 }
 
-/// Plays one game of random legal moves, until it is over at the latest,
-/// and returns the stix it closed.
+/// Plays one game of random legal moves, until it is over or its level
+/// complete at the latest, and returns the stix it closed.
 fn play_game(rng: &mut Rng, check: &impl Fn(&Before, &Game)) -> u32 {
     let mut game = new_game();
     let mut closes = 0;
     for _ in 0..MOVES_PER_GAME {
-        if game.is_over() {
+        if game.is_over() || game.is_level_complete() {
             break;
         }
         let Some(step) = random_move(&game, rng) else {

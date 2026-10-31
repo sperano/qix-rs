@@ -1,13 +1,19 @@
 //! What a tick of the game reports to the application.
 
 /// Something that happened during a tick.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Event {
     /// The player lost a life.
     Death(DeathCause),
     /// The player lost the last life, right after its
     /// [`Event::Death`]: the game no longer ticks.
     GameOver,
+    /// A claim took the board to the claim threshold or above, and the
+    /// level bonus was scored: the game no longer ticks.
+    LevelComplete {
+        /// The board's claimed fraction after the claim, from 0 to 1.
+        fraction: f32,
+    },
 }
 
 /// What killed the player.
