@@ -1,11 +1,10 @@
 //! The fuse lighting, burning and going out through [`Game::tick`].
 
 use crate::fuse::FuseTimer;
+use crate::game_test::penned;
 use crate::stix::legal_moves;
 use crate::tuning::{FUSE_DELAY_TICKS, FUSE_STEP_TICKS, MARKER_STEP_TICKS};
-use crate::{
-    Board, DeathCause, Dir, Event, Fuse, Game, InputState, MarkerState, Point, Qix, Rng, Vec2,
-};
+use crate::{DeathCause, Dir, Event, Fuse, Game, InputState, MarkerState, Point, Rng};
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1196;
@@ -23,16 +22,11 @@ const UP_RIGHT_UP_HEAD: usize = 3;
 /// Index of the head of [`spiral_into_a_dead_end`]'s stix.
 const SPIRAL_HEAD: usize = 5;
 
-/// A game on a free `W x H` board with a short Qix in its top-left cell
-/// and no Sparx.
+/// A game on a `W x H` board with the Qix penned in its left column, out
+/// of reach of the stix, and no Sparx.
 fn fuse_game() -> Game {
-    let qix = Qix::new(
-        Vec2::new(0.25, 0.5),
-        Vec2::new(0.75, 0.5),
-        Vec2::default(),
-        0.0,
-    );
-    Game::with_board(Board::new(W, H), qix, Vec::new(), Rng::new(SEED))
+    let (board, qix) = penned(W, H, 0);
+    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
 }
 
 fn drawing(dir: Dir) -> InputState {
@@ -118,7 +112,9 @@ fn the_lit_fuse_burns_one_segment_every_step_ticks() {
     let mut game = up_right_up();
     assert_eq!(game.stix().unwrap().points().len(), UP_RIGHT_UP_HEAD + 1);
     stand(&mut game, FUSE_DELAY_TICKS);
-    for pos in 1..=UP_RIGHT_UP_HEAD {
+    // The fuse reaching the head kills and goes out: see
+    // `the_fuse_reaching_the_marker_kills_once_and_goes_out`.
+    for pos in 1..UP_RIGHT_UP_HEAD {
         stand(&mut game, FUSE_STEP_TICKS - 1);
         assert_eq!(game.fuse(), fuse_at(pos - 1));
         assert!(!fuse_death(&game));
@@ -128,7 +124,7 @@ fn the_lit_fuse_burns_one_segment_every_step_ticks() {
 }
 
 #[test]
-fn the_fuse_reaching_the_marker_kills_on_every_tick_it_is_there() {
+fn the_fuse_reaching_the_marker_kills_once_and_goes_out() {
     let mut game = up_right_up();
     let burn = FUSE_DELAY_TICKS + FUSE_STEP_TICKS * UP_RIGHT_UP_HEAD as u32;
     let watch = burn + FUSE_STEP_TICKS;
@@ -138,8 +134,8 @@ fn the_fuse_reaching_the_marker_kills_on_every_tick_it_is_there() {
             fuse_death(&game)
         })
         .collect();
-    assert_eq!(deaths, (burn..=watch).collect::<Vec<_>>());
-    assert_eq!(game.fuse(), fuse_at(UP_RIGHT_UP_HEAD));
+    assert_eq!(deaths, [burn]);
+    assert_eq!(game.fuse(), None);
 }
 
 #[test]

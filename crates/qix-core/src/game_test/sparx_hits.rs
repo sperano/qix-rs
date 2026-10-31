@@ -1,7 +1,7 @@
 //! The Sparx walking the border and killing the marker through
 //! [`Game::tick`].
 
-use super::{SEED, draw, holding, new_game};
+use super::{SEED, draw, holding, new_game, penned};
 use crate::tuning::{BOARD_W, MARKER_STEP_TICKS, SPARX_STEP_TICKS};
 use crate::{
     Board, DeathCause, Dir, DrawKind, Event, Game, InputState, MarkerState, Point, Qix, Rng, Sparx,
@@ -22,8 +22,10 @@ const GAP_TICKS: u32 = SPARX_STEP_TICKS * GAP as u32;
 /// A tick on which the marker and the Sparx both step.
 const BOTH_STEP_TICK: u32 = MARKER_STEP_TICKS * SPARX_STEP_TICKS;
 
-/// Steps of a stix straight up from the marker's start across the board.
-const ACROSS: u32 = H as u32;
+/// Height of the board of [`a_sparx_cut_off_by_a_claim_snaps_back_to_the_border`],
+/// tall enough to pen its Qix in [`CUT_COLUMN`], right of the stix.
+const CUT_H: u16 = 6;
+const CUT_COLUMN: u16 = W - 2;
 
 fn sparx(pos: Point, dir: Dir) -> Sparx {
     Sparx {
@@ -120,11 +122,13 @@ fn a_marker_and_a_sparx_swapping_points_kills() {
 
 #[test]
 fn a_sparx_cut_off_by_a_claim_snaps_back_to_the_border() {
-    // The stix goes straight up from (W / 2, H) and claims the left half,
-    // where the Sparx walks.
-    let mut game = sparx_game(vec![sparx(Point::new(0, 1), Dir::Down)]);
+    // The stix goes straight up from (W / 2, CUT_H) and claims the left
+    // half, where the Sparx walks.
+    let (board, qix) = penned(W, CUT_H, CUT_COLUMN);
+    let walker = sparx(Point::new(0, 1), Dir::Down);
+    let mut game = Game::with_board(board, qix, vec![walker], Rng::new(SEED));
 
-    draw(&mut game, Dir::Up, DrawKind::Fast, ACROSS);
+    draw(&mut game, Dir::Up, DrawKind::Fast, u32::from(CUT_H));
 
     let sparx = game.sparx()[0];
     assert_eq!(game.marker().state, MarkerState::OnBorder);

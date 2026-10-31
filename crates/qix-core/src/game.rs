@@ -11,7 +11,10 @@ use crate::qix::Qix;
 use crate::rng::Rng;
 use crate::sparx::Sparx;
 use crate::stix::{Stix, legal_moves, legal_step};
-use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS, SLOW_STEP_TICKS, SPARX_STEP_TICKS};
+use crate::tuning::{
+    BOARD_H, BOARD_W, MARKER_STEP_TICKS, RESPAWN_GRACE_TICKS, SLOW_STEP_TICKS, SPARX_STEP_TICKS,
+    STARTING_LIVES,
+};
 
 /// The whole game, advanced one fixed step at a time.
 #[derive(Debug)]
@@ -32,6 +35,11 @@ pub struct Game {
     sparx_ticks: u32,
     /// Every random choice of the game comes from here.
     rng: Rng,
+    /// Lives left, the one being played included; the game is over at
+    /// zero.
+    lives: u32,
+    /// Ticks of the grace period after a death still to run.
+    grace_ticks: u32,
     /// What the last tick raised.
     events: Vec<Event>,
 }
@@ -64,31 +72,45 @@ impl Game {
             sparx,
             sparx_ticks: 0,
             rng,
+            lives: STARTING_LIVES,
+            grace_ticks: 0,
             events: Vec::new(),
         }
     }
 
     /// Advances the game by one step of `1 / TICK_HZ` seconds: the marker
     /// moves, then the fuse burns, then the Qix moves, then the Sparx; a
-    /// Qix touching the stix or the drawing marker raises
-    /// [`Event::Death`], then so does a Sparx touching the marker, then
-    /// the fuse at the marker.
+    /// Qix touching the stix or the drawing marker kills the player, else
+    /// a Sparx touching the marker does, else the fuse at the marker; one
+    /// death at most per tick. Once the game is over, a tick does nothing.
+    ///
+    /// A death raises [`Event::Death`] and takes a life, and the last one
+    /// [`Event::GameOver`] too: the stix and its fuse are cleared and the
+    /// marker is back on the border where the stix began. For
+    /// [`RESPAWN_GRACE_TICKS`] ticks after it, the Sparx cannot kill and
+    /// the marker cannot draw.
     pub fn tick(&mut self, input: &InputState) {
-        self.ticks += 1;
         self.events.clear();
+        if self.is_over() {
+            return;
+        }
+        self.ticks += 1;
+        let grace = self.grace_ticks > 0;
+        self.grace_ticks = self.grace_ticks.saturating_sub(1);
         let marker_from = self.marker.pos;
-        self.move_marker(input);
+        self.move_marker(input, grace);
         let fuse_hit = self.burn_fuse(marker_from);
         self.qix.tick(&self.board, &mut self.rng);
-        let sparx_hit = self.move_sparx(marker_from);
-        if self.qix_hits_player() {
-            self.events.push(Event::Death(DeathCause::Qix));
-        }
-        if sparx_hit {
-            self.events.push(Event::Death(DeathCause::Sparx));
-        }
-        if fuse_hit {
-            self.events.push(Event::Death(DeathCause::Fuse));
+        let sparx_hit = self.move_sparx(marker_from) && !grace;
+        let cause = if self.qix_hits_player() {
+            Some(DeathCause::Qix)
+        } else if sparx_hit {
+            Some(DeathCause::Sparx)
+        } else {
+            fuse_hit.then_some(DeathCause::Fuse)
+        };
+        if let Some(cause) = cause {
+            self.die(cause);
         }
     }
 
@@ -127,9 +149,46 @@ impl Game {
         &self.sparx
     }
 
+    /// The lives left, the one being played included.
+    pub fn lives(&self) -> u32 {
+        self.lives
+    }
+
+    /// Ticks of the grace period after a death still to run, the next
+    /// one included; zero outside it.
+    pub fn grace_ticks(&self) -> u32 {
+        self.grace_ticks
+    }
+
+    /// The last life is lost: the game no longer ticks.
+    pub fn is_over(&self) -> bool {
+        self.lives == 0
+    }
+
     /// The events the last tick raised, in the order they happened.
     pub fn events(&self) -> &[Event] {
         &self.events
+    }
+
+    /// Raises [`Event::Death`] for `cause` and takes a life: the stix and
+    /// its fuse are cleared, the marker is back on the border where the
+    /// stix began (or stays where it is on the border) and the grace
+    /// period starts. Taking the last life raises [`Event::GameOver`]
+    /// instead of starting a grace period.
+    fn die(&mut self, cause: DeathCause) {
+        self.events.push(Event::Death(cause));
+        self.lives -= 1;
+        if let Some(stix) = self.stix.take() {
+            self.marker.pos = stix.start();
+        }
+        self.marker.state = MarkerState::OnBorder;
+        self.marker_held_ticks = 0;
+        self.fuse.put_out();
+        if self.is_over() {
+            self.events.push(Event::GameOver);
+        } else {
+            self.grace_ticks = RESPAWN_GRACE_TICKS;
+        }
     }
 
     /// The Qix touches the stix or the marker drawing it; a marker on the
@@ -143,8 +202,7 @@ impl Game {
     /// Burns the fuse one tick of a marker standing still on the stix, or
     /// puts it out when the marker stepped from `marker_from` this tick or
     /// has no stix; a marker caught in a dead end lights it at once.
-    /// Returns whether the fuse is at the marker: it stays there, raising
-    /// a death every tick, until the marker steps or the stix closes.
+    /// Returns whether the fuse is at the marker, which kills it.
     fn burn_fuse(&mut self, marker_from: Point) -> bool {
         let Some(stix) = &self.stix else {
             self.fuse.put_out();
@@ -187,8 +245,9 @@ impl Game {
     ///
     /// While drawing, the marker stands still on the stix as long as no
     /// draw button is held; pressing one again restarts the step count.
-    fn move_marker(&mut self, input: &InputState) {
-        let draw = input.draw_kind();
+    /// During the `grace` period the draw buttons are ignored.
+    fn move_marker(&mut self, input: &InputState, grace: bool) {
+        let draw = input.draw_kind().filter(|_| !grace);
         let stopped = self.marker.state == MarkerState::Drawing && draw.is_none();
         let Some(dir) = input.dir.filter(|_| !stopped) else {
             self.marker_held_ticks = 0;

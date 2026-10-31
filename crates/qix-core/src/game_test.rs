@@ -1,8 +1,9 @@
 use crate::qix_test::qix_at;
 use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS, SLOW_STEP_TICKS};
-use crate::{Board, Cell, Dir, DrawKind, Game, InputState, MarkerState, Point, Rng};
+use crate::{Board, Cell, Dir, DrawKind, Game, InputState, MarkerState, Point, Qix, Rng, Vec2};
 
 mod claims;
+mod deaths;
 mod qix_hits;
 mod sparx_hits;
 
@@ -12,6 +13,15 @@ const SEED: u64 = 1194;
 /// Dimensions of the small board the lap and corner tests use.
 const W: u16 = 4;
 const H: u16 = 3;
+
+/// Dimensions of the board of [`reaching_the_border_closes_the_stix`],
+/// tall enough to pen its Qix in [`PEN_COLUMN`].
+const PEN_W: u16 = 8;
+const PEN_H: u16 = 6;
+
+/// The column [`penned`] keeps the Qix of
+/// [`reaching_the_border_closes_the_stix`] in, clear of the stix.
+const PEN_COLUMN: u16 = 1;
 
 /// Steps the marker-timing tests hold a direction for.
 const STEPS: u32 = 5;
@@ -28,6 +38,34 @@ fn new_game() -> Game {
 /// free.
 fn small_game(board: Board) -> Game {
     Game::with_board(board, qix_at((0, 0)), Vec::new(), Rng::new(SEED))
+}
+
+/// A free `width x height` board but for claimed walls beside `column`
+/// from the second row to the second last, and a vertical Qix down the
+/// middle of the column, too long to turn between its walls: it stays in
+/// the column however it moves, yet a claim floods from it into the rest
+/// of the board through the first and last rows.
+pub(crate) fn penned(width: u16, height: u16, column: u16) -> (Board, Qix) {
+    let mut board = Board::new(width, height);
+    for y in 1..height - 1 {
+        for x in [column.checked_sub(1), Some(column + 1)]
+            .into_iter()
+            .flatten()
+        {
+            if x < width {
+                board.set_cell(x, y, Cell::Claimed(DrawKind::Fast));
+            }
+        }
+    }
+    let x = f32::from(column) + 0.5;
+    let (top, bottom) = (0.5, f32::from(height) - 1.5);
+    let qix = Qix::new(
+        Vec2::new(x, top),
+        Vec2::new(x, bottom),
+        Vec2::default(),
+        0.0,
+    );
+    (board, qix)
 }
 
 fn holding(dir: Dir) -> InputState {
@@ -350,10 +388,11 @@ fn a_draw_step_off_the_board_starts_no_stix() {
 
 #[test]
 fn reaching_the_border_closes_the_stix() {
-    let mut game = small_game(Board::new(W, H));
+    let (board, qix) = penned(PEN_W, PEN_H, PEN_COLUMN);
+    let mut game = Game::with_board(board, qix, Vec::new(), Rng::new(SEED));
     let start = game.marker().pos;
 
-    draw(&mut game, Dir::Up, DrawKind::Fast, u32::from(H));
+    draw(&mut game, Dir::Up, DrawKind::Fast, u32::from(PEN_H));
 
     assert_eq!(game.marker().pos, Point::new(start.x, 0));
     assert_eq!(game.marker().state, MarkerState::OnBorder);

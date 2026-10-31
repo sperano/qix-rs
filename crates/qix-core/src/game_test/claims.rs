@@ -1,8 +1,8 @@
 //! Closing a stix through [`Game::tick`]: the side holding the Qix stays
 //! free.
 
-use super::{SEED, draw, walk};
-use crate::{Board, Cell, Dir, DrawKind, Game, Qix, Rng, Vec2};
+use super::{SEED, draw, penned, walk};
+use crate::{Board, Dir, DrawKind, Game, Rng};
 
 /// Dimensions of the boards: the marker starts at `(W / 2, H)`, and the
 /// stix runs straight along column `W / 2` from one edge to the other.
@@ -10,43 +10,20 @@ const W: u16 = 20;
 const H: u16 = 10;
 
 /// The free column holding the Qix when it is left of the stix, and when
-/// it is right of it: claimed walls flank each from the second row to the
-/// second last, so the Qix stays in it however it moves.
+/// it is right of it: [`penned`] keeps the Qix in it.
 const LEFT_COLUMN: u16 = 3;
 const RIGHT_COLUMN: u16 = 16;
 
-const WALL: Cell = Cell::Claimed(DrawKind::Fast);
-
-/// The cells beside `column` from the second row to the second last.
-fn is_wall(column: u16, x: u16, y: u16) -> bool {
-    (x + 1 == column || x == column + 1) && (1..H - 1).contains(&y)
-}
-
 /// A free `W x H` board but for the walls of `column`.
 fn walled_board(column: u16) -> Board {
-    let mut board = Board::new(W, H);
-    for y in 0..H {
-        for x in 0..W {
-            if is_wall(column, x, y) {
-                board.set_cell(x, y, WALL);
-            }
-        }
-    }
-    board
+    penned(W, H, column).0
 }
 
 /// A game on the board walled around `column`, with a vertical Qix down
 /// the middle of the column, too long to turn between its walls.
 fn game_with_qix_in(column: u16) -> Game {
-    let x = f32::from(column) + 0.5;
-    let (top, bottom) = (0.5, f32::from(H) - 1.5);
-    let qix = Qix::new(
-        Vec2::new(x, top),
-        Vec2::new(x, bottom),
-        Vec2::default(),
-        0.0,
-    );
-    Game::with_board(walled_board(column), qix, Vec::new(), Rng::new(SEED))
+    let (board, qix) = penned(W, H, column);
+    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
 }
 
 /// Draws the stix up from the marker's start to the top edge.

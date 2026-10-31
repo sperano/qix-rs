@@ -4,7 +4,9 @@
 
 use qix_core::stix::legal_moves;
 use qix_core::tuning::SLOW_STEP_TICKS;
-use qix_core::{Board, Dir, DrawKind, Game, InputState, MarkerState, Qix, Sparx, Stix, Vec2};
+use qix_core::{
+    Board, Dir, DrawKind, Event, Game, InputState, MarkerState, Qix, Sparx, Stix, Vec2,
+};
 
 /// Dimensions of the board the runs play on: small, so that random stix
 /// reach the border before they wind themselves into a dead end.
@@ -117,10 +119,14 @@ fn random_move(game: &Game, rng: &mut Rng) -> Option<Move> {
 }
 
 /// From the border: a step off it into free space with a draw button
-/// held, or else a step along a border edge.
+/// held, or else a step along a border edge; only the latter during the
+/// grace period after a death, when the marker cannot draw.
 fn border_move(game: &Game, rng: &mut Rng) -> Move {
     let (marker, board) = (game.marker(), game.board());
-    let starts = legal_moves(&marker, &Stix::new(marker.pos), board);
+    let starts = match game.grace_ticks() {
+        0 => legal_moves(&marker, &Stix::new(marker.pos), board),
+        _ => Vec::new(),
+    };
     if let Some(dir) = rng.pick(&starts).filter(|_| rng.chance(START_DRAW_PERCENT)) {
         let draw = Some(rng.draw_kind());
         return Move { dir, draw };
@@ -148,9 +154,10 @@ fn stix_move(game: &Game, stix: &Stix, rng: &mut Rng) -> Option<Move> {
     Some(Move { dir, draw })
 }
 
-/// Holds `step` until the marker moves, calling `check` after every tick,
-/// and returns whether the step closed a stix: a draw step that ends on
-/// the border, which also holds for a stix closed by its first step.
+/// Holds `step` until the marker moves or dies, calling `check` after
+/// every tick, and returns whether the step closed a stix: a draw step
+/// that ends on the border, which also holds for a stix closed by its
+/// first step.
 fn play(game: &mut Game, step: Move, check: &impl Fn(&Before, &Game)) -> bool {
     let from = game.marker().pos;
     let input = step.input();
@@ -158,6 +165,13 @@ fn play(game: &mut Game, step: Move, check: &impl Fn(&Before, &Game)) -> bool {
         let before = Before::of(game);
         game.tick(&input);
         check(&before, game);
+        if game
+            .events()
+            .iter()
+            .any(|event| matches!(event, Event::Death(_)))
+        {
+            return false;
+        }
         if game.marker().pos != from {
             return step.draw.is_some() && game.marker().state == MarkerState::OnBorder;
         }
@@ -176,11 +190,15 @@ fn new_game() -> Game {
     Game::with_board(board, qix, sparx, qix_core::Rng::new(QIX_SEED))
 }
 
-/// Plays one game of random legal moves and returns the stix it closed.
+/// Plays one game of random legal moves, until it is over at the latest,
+/// and returns the stix it closed.
 fn play_game(rng: &mut Rng, check: &impl Fn(&Before, &Game)) -> u32 {
     let mut game = new_game();
     let mut closes = 0;
     for _ in 0..MOVES_PER_GAME {
+        if game.is_over() {
+            break;
+        }
         let Some(step) = random_move(&game, rng) else {
             break;
         };

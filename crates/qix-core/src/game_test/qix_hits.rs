@@ -13,14 +13,20 @@ const H: u16 = 30;
 const BAND_ROWS: u16 = 3;
 
 /// The free column of [`band_and_column`], right of the marker's start.
-const COLUMN: u16 = 15;
+pub(super) const COLUMN: u16 = 15;
 
 /// Steps the stix goes up into the band before turning right.
-const STEPS_UP: u32 = 2;
+pub(super) const STEPS_UP: u32 = 2;
 
 /// Steps the marker goes past [`COLUMN`], far enough that the Qix in it
 /// stays clear of the marker's square.
 const CLEAR_OF_COLUMN: u32 = 3;
+
+/// Where the top of [`falling_qix`]'s Qix starts, its length and the
+/// speed it starts falling at, in playfield units (per tick).
+const FALL_TOP: f32 = 10.0;
+const FALL_LENGTH: f32 = 2.0;
+const FALL_SPEED: f32 = 0.5;
 
 /// Ticks the tests watch a standing marker or Qix for.
 const WATCH_TICKS: u32 = 60;
@@ -49,7 +55,7 @@ fn column_qix(x: f32, top: f32, length: f32) -> Qix {
 /// A band of free rows along the bottom edge and a free column from it up
 /// to the top edge, with a Qix along the column that crosses every row of
 /// the band.
-fn band_and_column() -> Game {
+pub(super) fn band_and_column() -> Game {
     let board = board_with(|x, y| y >= H - BAND_ROWS || x == COLUMN);
     let qix = column_qix(f32::from(COLUMN) + 0.5, 0.5, f32::from(H) - 1.0);
     Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
@@ -67,6 +73,20 @@ fn deaths(game: &mut Game, input: InputState, ticks: u32) -> Vec<Event> {
     deaths
 }
 
+/// [`band_and_column`] with a short Qix high up the column instead,
+/// falling towards the band: it reaches the band only after a stix drawn
+/// across the column has passed it.
+fn falling_qix() -> Game {
+    let board = board_with(|x, y| y >= H - BAND_ROWS || x == COLUMN);
+    let qix = Qix::new(
+        Vec2::new(f32::from(COLUMN) + 0.5, FALL_TOP),
+        Vec2::new(f32::from(COLUMN) + 0.5, FALL_TOP + FALL_LENGTH),
+        Vec2::new(0.0, FALL_SPEED),
+        0.0,
+    );
+    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
+}
+
 /// Draws a stix up into the band, then `right` steps to the right, and
 /// returns the deaths raised on the way.
 fn draw_up_then_right(game: &mut Game, right: u32) -> Vec<Event> {
@@ -82,23 +102,29 @@ fn draw_up_then_right(game: &mut Game, right: u32) -> Vec<Event> {
 
 #[test]
 fn a_qix_crossing_a_horizontal_stix_kills() {
-    let mut game = band_and_column();
+    let mut game = falling_qix();
     let start_x = u32::from(game.marker().pos.x);
     let past_column = u32::from(COLUMN) + CLEAR_OF_COLUMN - start_x;
-    draw_up_then_right(&mut game, past_column);
-
-    game.tick(&InputState::default());
-
-    assert!(game.stix().is_some(), "the stix closed");
+    let mut raised = draw_up_then_right(&mut game, past_column);
     assert_eq!(
-        u32::from(game.marker().pos.x),
-        u32::from(COLUMN) + CLEAR_OF_COLUMN
+        raised,
+        [],
+        "the Qix reached the stix before the marker passed"
     );
+    let head = game.marker().pos;
+
+    let mut ticks = 0;
+    while raised.is_empty() && ticks < WATCH_TICKS {
+        raised = deaths(&mut game, InputState::default(), 1);
+        ticks += 1;
+    }
+
+    assert_eq!(raised, [Event::Death(DeathCause::Qix)]);
+    assert_eq!(u32::from(head.x), u32::from(COLUMN) + CLEAR_OF_COLUMN);
     assert!(
-        !qix_hits_marker(game.qix(), game.marker().pos),
+        !qix_hits_marker(game.qix(), head),
         "the Qix touches the marker"
     );
-    assert_eq!(game.events(), [Event::Death(DeathCause::Qix)]);
 }
 
 #[test]
@@ -108,10 +134,12 @@ fn a_qix_beside_the_stix_does_not_kill() {
     let short_of_column = u32::from(COLUMN) - 1 - start_x;
 
     let mut raised = draw_up_then_right(&mut game, short_of_column);
-    raised.extend(deaths(&mut game, InputState::default(), WATCH_TICKS));
-
     assert!(game.stix().is_some(), "the stix closed");
     assert_eq!(game.marker().pos.x, COLUMN - 1);
+    // The fuse may kill the standing marker meanwhile: `deaths` only
+    // counts the Qix's.
+    raised.extend(deaths(&mut game, InputState::default(), WATCH_TICKS));
+
     assert_eq!(raised, []);
 }
 

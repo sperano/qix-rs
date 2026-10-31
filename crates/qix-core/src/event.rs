@@ -5,6 +5,9 @@
 pub enum Event {
     /// The player lost a life.
     Death(DeathCause),
+    /// The player lost the last life, right after its
+    /// [`Event::Death`]: the game no longer ticks.
+    GameOver,
 }
 
 /// What killed the player.
