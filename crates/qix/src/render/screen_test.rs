@@ -1,10 +1,17 @@
-use qix_core::tuning::{MARKER_STEP_TICKS, POINTS_PER_CELL};
-use qix_core::{Board, Dir, Game, InputState, Qix, Rng, Session, Vec2};
+use qix_core::tuning::{CLAIM_THRESHOLD_RANGE, MARKER_STEP_TICKS, POINTS_PER_CELL};
+use qix_core::{
+    Board, Cell, ClaimThreshold, Dir, DrawKind, Game, GameState, InputState, Point, Qix, Rng,
+    Session, Sparx, SparxKind, Vec2,
+};
 
 use crate::render::screen::{Screen, game_over, level_complete, paused, screen, title};
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1;
+
+/// Seed of [`low_threshold_game`]: its Qix wander off their still start,
+/// and under it they keep clear of the stix.
+const LEVEL_SEED: u64 = 1206;
 
 /// Dimensions of the board of [`claimed_game`].
 const W: u16 = 4;
@@ -12,6 +19,29 @@ const H: u16 = 2;
 
 /// The cells the stix of [`claimed_game`] claims.
 const CLAIMED_CELLS: u32 = 2;
+
+/// Dimensions of the board of [`level_game`]: a stix up column
+/// `LEVEL_W / 2` from the marker's start claims the cells right of it,
+/// leaving the Qix in cell `(0, 0)` on its left.
+const LEVEL_W: u16 = 8;
+const LEVEL_H: u16 = 3;
+
+/// Cells [`level_game`] claims before the stix, clear of its column and
+/// of the top row: with the stix, 18 cells of 24.
+const LEVEL_CLAIMED: [(u16, u16); 6] = [(0, 1), (1, 1), (2, 1), (0, 2), (1, 2), (2, 2)];
+
+/// Dimensions of the board of [`split_game`]: a stix up column
+/// `SPLIT_W / 2` splits its two Qix.
+const SPLIT_W: u16 = 8;
+const SPLIT_H: u16 = 4;
+
+/// The columns [`split_game`] claims before the stix: the first walls a
+/// Qix into column 0, the others narrow the area of the second Qix.
+const SPLIT_CLAIMED_COLUMNS: [u16; 3] = [1, 6, 7];
+
+/// Ticks a game is given to lose every life to a Sparx circling its
+/// `W x H` border.
+const MAX_GAME_TICKS: u32 = 10_000;
 
 fn press(confirm: bool, pause: bool) -> InputState {
     InputState {
@@ -48,6 +78,106 @@ fn claimed_game() -> Game {
     }
     assert_eq!(game.stix(), None, "the stix did not close");
     game
+}
+
+/// A still Qix in cell `(x, y)`.
+fn qix_at(x: u16, y: u16) -> Qix {
+    let (x, y) = (f32::from(x), f32::from(y) + 0.5);
+    Qix::new(
+        Vec2::new(x + 0.25, y),
+        Vec2::new(x + 0.75, y),
+        Vec2::default(),
+        0.0,
+    )
+}
+
+/// A game on a `width x height` board at the lowest claim threshold,
+/// with `claimed` cells claimed, `qix` and no Sparx.
+fn low_threshold_game(
+    (width, height): (u16, u16),
+    claimed: impl IntoIterator<Item = (u16, u16)>,
+    qix: Vec<Qix>,
+) -> Game {
+    let mut board = Board::new(width, height);
+    for (x, y) in claimed {
+        board.set_cell(x, y, Cell::Claimed(DrawKind::Fast));
+    }
+    let mut game = Game::with_board(board, qix, Vec::new(), Rng::new(LEVEL_SEED));
+    game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.start()));
+    game
+}
+
+/// A game whose stix up the middle completes the level at 75%, 25 points
+/// above the threshold.
+fn level_game() -> Game {
+    low_threshold_game((LEVEL_W, LEVEL_H), LEVEL_CLAIMED, vec![qix_at(0, 0)])
+}
+
+/// A game whose stix up the middle splits a Qix walled into column 0
+/// from another in column 5, with 62.5% claimed.
+fn split_game() -> Game {
+    let claimed = SPLIT_CLAIMED_COLUMNS
+        .into_iter()
+        .flat_map(|x| (0..SPLIT_H).map(move |y| (x, y)));
+    let qix = vec![qix_at(0, 0), qix_at(5, 0)];
+    low_threshold_game((SPLIT_W, SPLIT_H), claimed, qix)
+}
+
+/// A session over `game`, `height` cells high, started from the title,
+/// that drew a fast stix up the middle and completed the level.
+fn completed_level(game: Game, height: u16) -> Session {
+    let mut session = Session::new(game);
+    session.tick(&press(true, false));
+    let input = InputState {
+        dir: Some(Dir::Up),
+        fast: true,
+        ..InputState::default()
+    };
+    for _ in 0..u32::from(height) * MARKER_STEP_TICKS {
+        session.tick(&input);
+    }
+    session
+}
+
+/// The screen of `session`, whose state must be a completed level, and
+/// the [`level_complete`] screen of that state.
+fn level_screens(session: &Session) -> (Option<Screen>, Screen) {
+    let GameState::LevelComplete {
+        fraction,
+        bonus,
+        split,
+    } = session.state()
+    else {
+        panic!("level not complete: {:?}", session.state());
+    };
+    let expected = level_complete(session.game(), fraction, bonus, split);
+    (screen(session), expected)
+}
+
+/// A session on a free `W x H` board, started from the title, played
+/// until its marker lost every life to a Sparx circling the border.
+fn lost_game() -> Session {
+    let sparx = Sparx {
+        pos: Point::new(W / 2 + 1, H),
+        dir: Dir::Left,
+        kind: SparxKind::Normal,
+    };
+    let board = Board::new(W, H);
+    let game = Game::with_board(
+        board,
+        vec![qix_at(W - 1, H - 1)],
+        vec![sparx],
+        Rng::new(SEED),
+    );
+    let mut session = Session::new(game);
+    session.tick(&press(true, false));
+    for _ in 0..MAX_GAME_TICKS {
+        if session.state() != GameState::Playing {
+            break;
+        }
+        session.tick(&InputState::default());
+    }
+    session
 }
 
 #[test]
@@ -129,4 +259,32 @@ fn game_over_shows_the_final_score() {
             "Press Enter to continue".to_owned(),
         ]
     );
+}
+
+#[test]
+fn a_completed_level_shows_its_claim_and_bonus() {
+    let session = completed_level(level_game(), LEVEL_H);
+    let (shown, expected) = level_screens(&session);
+    assert_eq!(shown, Some(expected));
+    let lines = shown.unwrap().lines;
+    assert_eq!(lines[..2], ["Claimed 75.0%", "Bonus 25000"]);
+}
+
+#[test]
+fn a_split_level_shows_the_split() {
+    let session = completed_level(split_game(), SPLIT_H);
+    let (shown, expected) = level_screens(&session);
+    assert_eq!(shown, Some(expected));
+    let lines = shown.unwrap().lines;
+    assert_eq!(
+        lines[..3],
+        ["The Qix are split apart!", "Claimed 62.5%", "Bonus 0"]
+    );
+}
+
+#[test]
+fn a_lost_game_shows_the_game_over_screen() {
+    let session = lost_game();
+    assert_eq!(session.state(), GameState::GameOver);
+    assert_eq!(screen(&session), Some(game_over(session.game())));
 }

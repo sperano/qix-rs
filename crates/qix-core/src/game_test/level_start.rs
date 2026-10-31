@@ -238,6 +238,16 @@ fn a_restart_starts_a_new_game() {
 }
 
 #[test]
+fn a_restart_frees_the_board() {
+    let mut game = a_played_game();
+    assert!(game.board().claimed_fraction() > 0.0, "nothing claimed");
+
+    game.restart();
+
+    assert_eq!(game.board(), &Board::new(BOARD_W, BOARD_H));
+}
+
+#[test]
 fn a_restart_keeps_the_size_of_the_board() {
     let mut game = Game::with_board(
         Board::new(W, H),

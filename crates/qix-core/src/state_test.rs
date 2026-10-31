@@ -26,6 +26,22 @@ const FRACTION_AFTER: f32 = 0.75;
 const LOW_THRESHOLD: f32 = 0.5;
 const PERCENT_ABOVE_LOW: u32 = 25;
 
+/// Dimensions of the board of [`split_game`]: a stix up column
+/// `SPLIT_W / 2` from the marker's start splits its two Qix.
+const SPLIT_W: u16 = 8;
+const SPLIT_H: u16 = 4;
+
+/// The columns [`split_game`] claims before the stix: the first walls a
+/// Qix into column 0, the others narrow the area of the second Qix.
+const SPLIT_CLAIMED_COLUMNS: [u16; 3] = [1, 6, 7];
+
+/// The cells holding the Qix of [`split_game`], either side of the stix.
+const SPLIT_QIX_CELLS: [(u16, u16); 2] = [(0, 0), (5, 0)];
+
+/// The board's claimed fraction once the stix of [`split_game`] closes:
+/// 20 cells of 32, above [`LOW_THRESHOLD`].
+const SPLIT_FRACTION: f32 = 0.625;
+
 /// Dimensions of the board of [`sparx_game`]: its border is one loop the
 /// Sparx keeps walking.
 const SPARX_W: u16 = 4;
@@ -109,6 +125,22 @@ fn level_game() -> Game {
     game
 }
 
+/// A game on a `SPLIT_W x SPLIT_H` board with [`SPLIT_CLAIMED_COLUMNS`]
+/// claimed, a Qix in each of [`SPLIT_QIX_CELLS`], no Sparx and
+/// [`LOW_THRESHOLD`]: a stix up from the marker splits the Qix apart.
+fn split_game() -> Game {
+    let mut board = Board::new(SPLIT_W, SPLIT_H);
+    for x in SPLIT_CLAIMED_COLUMNS {
+        for y in 0..SPLIT_H {
+            board.set_cell(x, y, Cell::Claimed(DrawKind::Fast));
+        }
+    }
+    let qix = SPLIT_QIX_CELLS.map(qix_at).to_vec();
+    let mut game = Game::with_board(board, qix, Vec::new(), Rng::new(SEED));
+    game.set_claim_threshold(ClaimThreshold::new(LOW_THRESHOLD));
+    game
+}
+
 /// A game on a free `SPARX_W x SPARX_H` board with a still Qix in its
 /// bottom-right cell and a Sparx one step right of the marker heading
 /// for it: standing still, the marker loses a life every lap.
@@ -138,11 +170,17 @@ fn hold(session: &mut Session, input: InputState, ticks: u32) {
     }
 }
 
+/// A session over `game`, `height` cells high, that drew a stix up from
+/// the marker's start to the top edge.
+fn draw_up(game: Game, height: u16) -> Session {
+    let mut session = playing(game);
+    hold(&mut session, DRAW_UP, u32::from(height) * MARKER_STEP_TICKS);
+    session
+}
+
 /// A [`level_game`] played up to its completion.
 fn completed_level() -> Session {
-    let mut session = playing(level_game());
-    hold(&mut session, DRAW_UP, u32::from(H) * MARKER_STEP_TICKS);
-    session
+    draw_up(level_game(), H)
 }
 
 /// A [`sparx_game`] played until the state leaves [`GameState::Playing`];
@@ -232,9 +270,11 @@ fn ticking_while_paused_changes_nothing() {
     session.tick(&PAUSE);
 
     assert_waits(&mut session);
+    let game = format!("{:?}", session.game());
     hold(&mut session, CONFIRM, IDLE_TICKS);
 
     assert_eq!(session.state(), GameState::Paused);
+    assert_eq!(format!("{:?}", session.game()), game, "confirm ticked");
     assert!(session.game().stix().is_some());
 }
 
@@ -267,6 +307,20 @@ fn a_completed_level_shows_its_claim_and_bonus() {
 }
 
 #[test]
+fn a_split_level_shows_its_claim_without_a_bonus() {
+    let session = draw_up(split_game(), SPLIT_H);
+
+    assert_eq!(
+        session.state(),
+        GameState::LevelComplete {
+            fraction: SPLIT_FRACTION,
+            bonus: 0,
+            split: true,
+        }
+    );
+}
+
+#[test]
 fn a_completed_level_waits_for_confirm() {
     let mut session = completed_level();
 
@@ -279,7 +333,7 @@ fn a_completed_level_waits_for_confirm() {
 #[test]
 fn confirm_after_a_completed_level_plays_the_next_level() {
     let mut session = completed_level();
-    let score = session.game().score();
+    let (score, ticks) = (session.game().score(), session.game().ticks());
 
     session.tick(&CONFIRM);
 
@@ -289,6 +343,9 @@ fn confirm_after_a_completed_level_plays_the_next_level() {
     assert_eq!(game.board().claimed_fraction(), 0.0);
     assert_eq!(game.score(), score);
     assert!(!game.is_level_complete());
+    assert_eq!(game.ticks(), ticks, "the confirming tick ticked");
+    session.tick(&InputState::default());
+    assert_eq!(session.game().ticks(), ticks + 1);
 }
 
 #[test]
