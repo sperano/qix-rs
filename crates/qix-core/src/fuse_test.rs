@@ -26,7 +26,7 @@ const SPIRAL_HEAD: usize = 5;
 /// of reach of the stix, and no Sparx.
 fn fuse_game() -> Game {
     let (board, qix) = penned(W, H, 0);
-    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
+    Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED))
 }
 
 fn drawing(dir: Dir) -> InputState {

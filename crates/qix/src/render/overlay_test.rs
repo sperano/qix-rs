@@ -30,7 +30,7 @@ fn corner_qix() -> Qix {
 fn the_overlay_follows_the_claimed_share_and_the_ticks() {
     let mut board = Board::new(4, 2);
     board.set_cell(0, 0, Cell::Claimed(DrawKind::Fast));
-    let mut game = Game::with_board(board, corner_qix(), Vec::new(), Rng::new(SEED));
+    let mut game = Game::with_board(board, vec![corner_qix()], Vec::new(), Rng::new(SEED));
     let ticks = 3;
     for _ in 0..ticks {
         game.tick(&InputState::default());
@@ -46,7 +46,12 @@ fn the_overlay_shows_a_life_lost() {
         dir: Dir::Left,
         kind: SparxKind::Normal,
     };
-    let mut game = Game::with_board(Board::new(4, 2), corner_qix(), vec![sparx], Rng::new(SEED));
+    let mut game = Game::with_board(
+        Board::new(4, 2),
+        vec![corner_qix()],
+        vec![sparx],
+        Rng::new(SEED),
+    );
     for _ in 0..SPARX_STEP_TICKS {
         game.tick(&InputState::default());
     }

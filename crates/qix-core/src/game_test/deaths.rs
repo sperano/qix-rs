@@ -34,7 +34,7 @@ const FUSE_STIX_STEPS: u32 = 2;
 /// of reach of the stix, and no Sparx.
 fn fuse_game() -> Game {
     let (board, qix) = penned(W, H, 0);
-    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
+    Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED))
 }
 
 /// A game on a free `W x LAP_H` board with a Sparx [`GAP`] steps right of
@@ -47,7 +47,7 @@ fn sparx_game() -> Game {
         kind: SparxKind::Normal,
     };
     let board = Board::new(W, LAP_H);
-    Game::with_board(board, qix_at((0, 0)), vec![sparx], Rng::new(SEED))
+    Game::with_board(board, vec![qix_at((0, 0))], vec![sparx], Rng::new(SEED))
 }
 
 /// Ticks the fuse of a stix of `segments` segments takes to light and
@@ -57,13 +57,13 @@ fn burn_ticks(segments: u32) -> u32 {
 }
 
 /// Ticks `game` `ticks` times with nothing held.
-fn stand(game: &mut Game, ticks: u32) {
+pub(super) fn stand(game: &mut Game, ticks: u32) {
     hold(game, InputState::default(), ticks);
 }
 
 /// Waits out the grace period, draws a stix [`FUSE_STIX_STEPS`] up from
 /// the marker and stands until the fuse kills it.
-fn die_by_fuse(game: &mut Game) {
+pub(super) fn die_by_fuse(game: &mut Game) {
     stand(game, game.grace_ticks());
     draw(game, Dir::Up, DrawKind::Fast, FUSE_STIX_STEPS);
     stand(game, burn_ticks(1));
@@ -259,12 +259,12 @@ fn a_game_over_no_longer_ticks() {
     for _ in 0..STARTING_LIVES {
         die_by_fuse(&mut game);
     }
-    let (ticks, marker, qix) = (game.ticks(), game.marker(), game.qix().clone());
+    let (ticks, marker, qix) = (game.ticks(), game.marker(), game.qix().to_vec());
 
     hold(&mut game, holding(Dir::Right), MARKER_STEP_TICKS);
 
     assert_eq!(game.ticks(), ticks);
     assert_eq!(game.events(), []);
     assert_eq!(game.marker(), marker);
-    assert_eq!(game.qix(), &qix);
+    assert_eq!(game.qix(), qix);
 }

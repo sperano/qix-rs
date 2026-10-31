@@ -2,8 +2,8 @@
 //! free.
 
 use super::{SEED, draw, penned, walk};
-use crate::tuning::{POINTS_PER_CELL, SLOW_DRAW_FACTOR, STARTING_MULTIPLIER};
-use crate::{Board, Dir, DrawKind, Game, Rng};
+use crate::tuning::{POINTS_PER_CELL, SLOW_DRAW_FACTOR, STARTING_LIVES, STARTING_MULTIPLIER};
+use crate::{Board, Dir, DrawKind, Game, Point, Qix, Rng};
 
 /// Dimensions of the boards: the marker starts at `(W / 2, H)`, and the
 /// stix runs straight along column `W / 2` from one edge to the other.
@@ -29,6 +29,26 @@ fn walled_board(column: u16) -> Board {
 /// the middle of the column, too long to turn between its walls.
 fn game_with_qix_in(column: u16) -> Game {
     let (board, qix) = penned(W, H, column);
+    Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED))
+}
+
+/// A game on a free `W x H` board but for the walls of both
+/// [`LEFT_COLUMN`] and [`RIGHT_COLUMN`], with a Qix penned in each: the
+/// left one first in the game's list, or the right one.
+fn game_with_qix_either_side(left_first: bool) -> Game {
+    let (mut board, left) = penned(W, H, LEFT_COLUMN);
+    let (right_walls, right) = penned(W, H, RIGHT_COLUMN);
+    for (x, y) in (0..W).flat_map(|x| (0..H).map(move |y| (x, y))) {
+        let cell = right_walls.cell(i32::from(x), i32::from(y));
+        if cell.is_claimed() {
+            board.set_cell(x, y, cell);
+        }
+    }
+    let qix: Vec<Qix> = if left_first {
+        vec![left, right]
+    } else {
+        vec![right, left]
+    };
     Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
 }
 
@@ -52,7 +72,7 @@ fn close_from_top(game: &mut Game) {
 /// side is claimed.
 fn assert_qix_side_kept(game: &Game, column: u16) {
     let qix_left = column < W / 2;
-    let (cell_x, _) = game.qix().cell();
+    let (cell_x, _) = game.qix()[0].cell();
     assert_eq!(cell_x, column, "the Qix left its column");
     let kept = walled_board(column);
     for y in 0..H {
@@ -167,4 +187,21 @@ fn claims_add_up_in_the_score() {
         game.score().points(),
         (first + second) * POINTS_PER_CELL * STARTING_MULTIPLIER
     );
+}
+
+#[test]
+fn a_stix_between_two_qix_claims_nothing() {
+    for left_first in [true, false] {
+        let mut game = game_with_qix_either_side(left_first);
+        let board = game.board().clone();
+
+        close_from_bottom(&mut game);
+
+        let top = Point::new(W / 2, 0);
+        assert_eq!(game.marker().pos, top, "{left_first}: marker died");
+        assert_eq!(game.lives(), STARTING_LIVES, "{left_first}");
+        assert_eq!(game.stix(), None, "{left_first}");
+        assert_eq!(game.board(), &board, "{left_first}");
+        assert_eq!(game.score().points(), 0, "{left_first}");
+    }
 }

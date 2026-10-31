@@ -30,6 +30,12 @@ const FALL_TOP: f32 = 10.0;
 const FALL_LENGTH: f32 = 2.0;
 const FALL_SPEED: f32 = 0.5;
 
+/// A free column at the top of the board, closed off from the rest of
+/// it: [`with_a_penned_qix`]'s other Qix is kept there, clear of every
+/// stix.
+const POCKET_COLUMN: u16 = 2;
+const POCKET_ROWS: u16 = 10;
+
 /// Ticks the tests watch a standing marker or Qix for.
 const WATCH_TICKS: u32 = 60;
 
@@ -65,7 +71,23 @@ pub(super) fn band_and_column() -> Game {
 pub(super) fn band_and_column_with(sparx: Vec<Sparx>) -> Game {
     let board = board_with(|x, y| y >= H - BAND_ROWS || x == COLUMN);
     let qix = column_qix(f32::from(COLUMN) + 0.5, 0.5, f32::from(H) - 1.0);
-    Game::with_board(board, qix, sparx, Rng::new(SEED))
+    Game::with_board(board, vec![qix], sparx, Rng::new(SEED))
+}
+
+/// [`band_and_column`] with another Qix in a pocket of its own, either
+/// before the column's Qix in the game's list or after it.
+fn with_a_penned_qix(penned_first: bool) -> Game {
+    let pocket = |x, y| x == POCKET_COLUMN && y < POCKET_ROWS;
+    let board = board_with(|x, y| y >= H - BAND_ROWS || x == COLUMN || pocket(x, y));
+    let length = f32::from(POCKET_ROWS) - 1.0;
+    let penned = column_qix(f32::from(POCKET_COLUMN) + 0.5, 0.5, length);
+    let column = column_qix(f32::from(COLUMN) + 0.5, 0.5, f32::from(H) - 1.0);
+    let qix = if penned_first {
+        vec![penned, column]
+    } else {
+        vec![column, penned]
+    };
+    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
 }
 
 /// Ticks `game` `ticks` times with `input` and returns the deaths the
@@ -91,7 +113,7 @@ fn falling_qix() -> Game {
         Vec2::new(0.0, FALL_SPEED),
         0.0,
     );
-    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
+    Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED))
 }
 
 /// Draws a stix up into the band, then `right` steps to the right, and
@@ -129,7 +151,7 @@ fn a_qix_crossing_a_horizontal_stix_kills() {
     assert_eq!(raised, [Event::Death(DeathCause::Qix)]);
     assert_eq!(u32::from(head.x), u32::from(COLUMN) + CLEAR_OF_COLUMN);
     assert!(
-        !qix_hits_marker(game.qix(), head),
+        !qix_hits_marker(&game.qix()[0], head),
         "the Qix touches the marker"
     );
 }
@@ -156,14 +178,29 @@ fn a_qix_next_to_a_marker_on_the_border_does_not_kill() {
     let board = board_with(|x, _| x == column);
     let length = f32::from(H) - 0.5;
     let qix = column_qix(f32::from(column) + 0.25, 0.25, length);
-    let mut game = Game::with_board(board, qix, Vec::new(), Rng::new(SEED));
+    let mut game = Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED));
     let mut touching_ticks = 0;
 
     for _ in 0..WATCH_TICKS {
         game.tick(&InputState::default());
         assert_eq!(game.events(), []);
-        touching_ticks += u32::from(qix_hits_marker(game.qix(), game.marker().pos));
+        touching_ticks += u32::from(qix_hits_marker(&game.qix()[0], game.marker().pos));
     }
 
     assert!(touching_ticks > 0, "the Qix never came near the marker");
+}
+
+#[test]
+fn either_of_two_qix_kills() {
+    for penned_first in [true, false] {
+        let mut game = with_a_penned_qix(penned_first);
+        let start_x = u32::from(game.marker().pos.x);
+        let past_column = u32::from(COLUMN) + 1 - start_x;
+
+        let raised = draw_up_then_right(&mut game, past_column);
+
+        assert_eq!(raised, [Event::Death(DeathCause::Qix)], "{penned_first}");
+        let penned = &game.qix()[usize::from(!penned_first)];
+        assert!(penned.a().y < f32::from(POCKET_ROWS), "{penned:?} left");
+    }
 }

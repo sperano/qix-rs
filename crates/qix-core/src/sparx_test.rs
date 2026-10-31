@@ -14,6 +14,12 @@ const SEED: u64 = 1195;
 /// Steps the random-turn test draws, enough to see every way out.
 const DRAWS: usize = 100;
 
+/// Width of the board of the level spawn tests, and the Sparx they
+/// spawn: three pairs, the last one short, spread at quarters of it.
+const LEVEL_W: u16 = 12;
+const LEVEL_SPARX: usize = 5;
+const LEVEL_SPARX_X: [u16; 3] = [3, 6, 9];
+
 const CLAIMED: Cell = Cell::Claimed(DrawKind::Fast);
 
 fn sparx(pos: Point, dir: Dir) -> Sparx {
@@ -322,4 +328,55 @@ fn a_sparx_off_the_stix_does_not_step_along_it() {
     stepped.step_along_stix(&stix);
 
     assert_eq!(stepped, beside);
+}
+
+#[test]
+fn two_level_sparx_are_the_pair() {
+    let board = Board::new(W, H);
+
+    assert_eq!(
+        Sparx::spawn_level(&board, 2),
+        Sparx::spawn_pair(&board).to_vec()
+    );
+}
+
+#[test]
+fn level_sparx_come_in_pairs_spread_along_the_top_edge() {
+    let board = Board::new(LEVEL_W, H);
+
+    let spawned = Sparx::spawn_level(&board, LEVEL_SPARX);
+
+    let spots: Vec<_> = spawned.iter().map(|sparx| (sparx.pos, sparx.dir)).collect();
+    let [first, second, third] = LEVEL_SPARX_X.map(|x| Point::new(x, 0));
+    assert_eq!(
+        spots,
+        [
+            (first, Dir::Left),
+            (first, Dir::Right),
+            (second, Dir::Left),
+            (second, Dir::Right),
+            (third, Dir::Left),
+        ]
+    );
+    assert!(spawned.iter().all(|sparx| sparx.kind == SparxKind::Normal));
+}
+
+#[test]
+fn level_sparx_spawn_on_the_border_nearest_their_spot() {
+    let x = LEVEL_SPARX_X[0];
+    let mut board = Board::new(LEVEL_W, H);
+    board.set_cell(x - 1, 0, CLAIMED);
+    board.set_cell(x, 0, CLAIMED);
+
+    let spawned = Sparx::spawn_level(&board, LEVEL_SPARX);
+
+    let nearest = nearest_border_point(&board, Point::new(x, 0)).unwrap();
+    assert_ne!(nearest, Point::new(x, 0));
+    assert_eq!(spawned[0].pos, nearest);
+    assert!(spawned.iter().all(|sparx| board.is_border(sparx.pos)));
+}
+
+#[test]
+fn no_level_sparx_spawn_none() {
+    assert!(Sparx::spawn_level(&Board::new(W, H), 0).is_empty());
 }

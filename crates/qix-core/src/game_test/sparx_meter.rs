@@ -42,7 +42,7 @@ fn killer() -> Sparx {
 /// and `sparx` as the level's Sparx.
 fn game_with(sparx: Vec<Sparx>, length: u32) -> Game {
     let board = Board::new(W, H);
-    let mut game = Game::with_board(board, qix_at((0, 0)), sparx, Rng::new(SEED));
+    let mut game = Game::with_board(board, vec![qix_at((0, 0))], sparx, Rng::new(SEED));
     game.set_sparx_meter(SparxMeter::new(length));
     game
 }

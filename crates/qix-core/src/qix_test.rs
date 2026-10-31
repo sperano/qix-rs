@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 use crate::tuning::{BOARD_H, BOARD_W, QIX_LENGTH, QIX_MAX_SPIN, QIX_SPEED, QIX_TRAIL_LEN};
 use crate::{Board, Cell, DrawKind, Qix, Rng, Vec2};
 
@@ -17,6 +19,16 @@ const EPSILON: f32 = 1e-4;
 /// Ticks of the claimed-area run in which the Qix must touch each claimed
 /// area of [`board_with_claims`], so the run exercises the bounces off them.
 const MIN_TICKS_BESIDE_EACH_CLAIM: u32 = 10;
+
+/// A speed range entirely above [`QIX_SPEED`], as a later level's.
+const FAST_SPEED: RangeInclusive<f32> = 0.9..=1.0;
+
+/// Ticks of the [`Qix::previous`] test: past the second, the segment one
+/// tick ago is no longer the oldest of the trail.
+const PREVIOUS_TICKS: usize = 3;
+
+/// Where on the middle row the spawn test centres its Qix.
+const SPAWN_X: f32 = 40.0;
 
 /// Offsets, within its cell, of the ends of the [`qix_at`] Qix.
 const STILL_QIX_ENDS: (f32, f32) = (0.25, 0.75);
@@ -266,4 +278,45 @@ fn its_cell_is_the_cell_under_its_midpoint() {
     );
 
     assert_eq!(qix.cell(), (4, 3));
+}
+
+#[test]
+fn a_qix_spawned_at_a_point_is_centred_on_it() {
+    let centre = Vec2::new(SPAWN_X, f32::from(BOARD_H) * 0.5);
+
+    let qix = Qix::spawn_at(centre, QIX_SPEED, &mut Rng::new(SEED));
+
+    assert!((qix.a().midpoint(qix.b()) - centre).length() < EPSILON);
+    assert!(((qix.b() - qix.a()).length() - QIX_LENGTH).abs() < EPSILON);
+}
+
+#[test]
+fn a_spawned_qix_keeps_within_its_speed_range() {
+    let board = Board::new(BOARD_W, BOARD_H);
+    let centre = Vec2::new(f32::from(BOARD_W), f32::from(BOARD_H)) * 0.5;
+    let mut qix = Qix::spawn_at(centre, FAST_SPEED, &mut Rng::new(SEED));
+    assert_eq!(qix.speed(), &FAST_SPEED);
+    let bounds = FAST_SPEED.start() - EPSILON..=FAST_SPEED.end() + EPSILON;
+    assert!(bounds.contains(&qix.vel().length()));
+
+    run(&board, &mut qix, LONG_RUN_TICKS, |qix, tick| {
+        let speed = qix.vel().length();
+        assert!(bounds.contains(&speed), "tick {tick}: speed {speed}");
+    });
+}
+
+#[test]
+fn the_previous_segment_is_the_one_before_the_last_tick() {
+    let board = Board::new(BOARD_W, BOARD_H);
+    let mut rng = Rng::new(SEED);
+    let mut qix = qix_at((1, 1));
+    let mut segments = vec![(qix.a(), qix.b())];
+    assert_eq!(qix.previous(), segments[0], "before any tick");
+
+    for tick in 0..PREVIOUS_TICKS {
+        qix.tick(&board, &mut rng);
+        segments.push((qix.a(), qix.b()));
+        assert_ne!(segments[tick + 1], segments[tick], "tick {tick}: still");
+        assert_eq!(qix.previous(), segments[tick], "tick {tick}");
+    }
 }

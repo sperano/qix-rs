@@ -45,10 +45,12 @@ pub const FUSE_GLOW_RINGS: usize = 3;
 /// Opacity of each ring of the fuse's glow.
 const FUSE_GLOW_OPACITY: f32 = 0.3;
 
-/// Paints `game`'s enemies through `to_screen`: the Qix's trail, then the
+/// Paints `game`'s enemies through `to_screen`: each Qix's trail, then the
 /// Sparx and the fuse on top.
 pub fn paint(painter: &Painter, to_screen: RectTransform, game: &Game) {
-    paint_qix(painter, to_screen, game.qix(), game.ticks());
+    for qix in game.qix() {
+        paint_qix(painter, to_screen, qix, game.ticks());
+    }
     for sparx in game.sparx() {
         paint_sparx(painter, to_screen, sparx, game.ticks());
     }

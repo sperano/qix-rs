@@ -1,4 +1,4 @@
-use crate::{Dir, Point, Vec2, segments_intersect};
+use crate::{Dir, Point, Vec2, in_triangle, segments_intersect};
 
 #[test]
 fn opposite_pairs_the_directions() {
@@ -151,4 +151,52 @@ fn intersecting_is_symmetric() {
     let (a, b, c, d) = (v(0.0, 0.0), v(2.0, 2.0), v(0.0, 2.0), v(2.0, 0.0));
     assert!(segments_intersect(c, d, a, b));
     assert!(segments_intersect(b, a, d, c));
+}
+
+/// A right triangle with its right angle at the origin.
+fn right_triangle() -> [Vec2; 3] {
+    [
+        Vec2::new(0.0, 0.0),
+        Vec2::new(4.0, 0.0),
+        Vec2::new(0.0, 4.0),
+    ]
+}
+
+#[test]
+fn a_point_inside_a_triangle_is_in_it_either_way_round() {
+    let triangle = right_triangle();
+    let [p, q, r] = triangle;
+    let point = Vec2::new(1.0, 1.0);
+
+    assert!(in_triangle(point, triangle));
+    assert!(in_triangle(point, [p, r, q]));
+}
+
+#[test]
+fn a_point_on_a_side_or_a_corner_is_in_the_triangle() {
+    let triangle = right_triangle();
+
+    assert!(in_triangle(Vec2::new(2.0, 0.0), triangle));
+    assert!(in_triangle(Vec2::new(2.0, 2.0), triangle));
+    assert!(in_triangle(Vec2::new(0.0, 4.0), triangle));
+}
+
+#[test]
+fn a_point_outside_a_triangle_is_not_in_it() {
+    let triangle = right_triangle();
+
+    assert!(!in_triangle(Vec2::new(3.0, 3.0), triangle));
+    assert!(!in_triangle(Vec2::new(-0.1, 1.0), triangle));
+}
+
+#[test]
+fn a_triangle_with_no_area_holds_no_point() {
+    let flat = [
+        Vec2::new(0.0, 0.0),
+        Vec2::new(2.0, 0.0),
+        Vec2::new(4.0, 0.0),
+    ];
+
+    assert!(!in_triangle(Vec2::new(1.0, 0.0), flat));
+    assert!(!in_triangle(Vec2::new(6.0, 0.0), flat));
 }

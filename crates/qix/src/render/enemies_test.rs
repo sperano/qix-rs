@@ -3,6 +3,7 @@ use std::f32::consts::FRAC_1_SQRT_2;
 use eframe::egui::{self, Color32, Pos2, Rect, Shape, Vec2, emath::RectTransform, pos2, vec2};
 use qix_core::tuning::{
     BOARD_H, BOARD_W, FUSE_DELAY_TICKS, FUSE_STEP_TICKS, MARKER_STEP_TICKS, QIX_TRAIL_LEN,
+    TWO_QIX_FROM_LEVEL,
 };
 use qix_core::{Board, Dir, Game, InputState, Point, Qix, Rng, Sparx, SparxKind};
 
@@ -196,7 +197,7 @@ fn still_qix() -> Qix {
 
 fn game_with(sparx: Vec<Sparx>) -> Game {
     let board = Board::new(BOARD_W, BOARD_H);
-    Game::with_board(board, still_qix(), sparx, Rng::new(SEED))
+    Game::with_board(board, vec![still_qix()], sparx, Rng::new(SEED))
 }
 
 /// Ticks `game` `ticks` times with nothing held.
@@ -212,7 +213,7 @@ fn the_qix_is_painted_as_its_whole_trail() {
     let ticks = palette::QIX_TRAIL.len();
     idle(&mut game, ticks);
     let shapes = painted(&game);
-    assert_eq!(game.qix().trail().len(), ticks + 1);
+    assert_eq!(game.qix()[0].trail().len(), ticks + 1);
     for colour in palette::QIX_TRAIL {
         let expected = if colour == palette::QIX_TRAIL[0] {
             2
@@ -227,7 +228,7 @@ fn the_qix_is_painted_as_its_whole_trail() {
 fn each_trail_segment_is_painted_on_its_ends_oldest_first() {
     let mut game = game_with(Vec::new());
     idle(&mut game, QIX_TRAIL_LEN + 1);
-    let trail = game.qix().trail();
+    let trail = game.qix()[0].trail();
     assert_ne!(trail.front(), trail.back(), "the Qix did not move");
     let cycle = palette::QIX_TRAIL.len() as u64;
     let painted = lines(&painted(&game));
@@ -240,6 +241,31 @@ fn each_trail_segment_is_painted_on_its_ends_oldest_first() {
         }
         let tick = (game.ticks() - age) % cycle;
         assert_eq!(colour, palette::QIX_TRAIL[tick as usize], "segment {i}");
+    }
+}
+
+#[test]
+fn every_qix_of_a_two_qix_level_is_painted() {
+    let mut game = Game::new(Rng::new(SEED));
+    game.start_level(TWO_QIX_FROM_LEVEL);
+    idle(&mut game, 1);
+    assert_eq!(game.qix().len(), 2);
+    let painted: Vec<_> = lines(&painted(&game))
+        .into_iter()
+        .filter(|(_, colour)| palette::QIX_TRAIL.contains(colour))
+        .collect();
+    let trails: usize = game.qix().iter().map(|qix| qix.trail().len()).sum();
+    assert_eq!(painted.len(), trails);
+    for qix in game.qix() {
+        let (a, b) = (qix.a(), qix.b());
+        let ends = [on_screen(a.x, a.y), on_screen(b.x, b.y)];
+        let found = painted.iter().any(|(painted, _)| {
+            painted
+                .iter()
+                .zip(ends)
+                .all(|(end, expected)| end.distance(expected) < EPSILON)
+        });
+        assert!(found, "Qix at {a:?}-{b:?} not painted");
     }
 }
 

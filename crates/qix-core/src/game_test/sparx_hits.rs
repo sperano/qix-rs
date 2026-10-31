@@ -45,7 +45,7 @@ fn sparx_game(sparx: Vec<Sparx>) -> Game {
         Vec2::default(),
         0.0,
     );
-    Game::with_board(Board::new(W, H), qix, sparx, Rng::new(SEED))
+    Game::with_board(Board::new(W, H), vec![qix], sparx, Rng::new(SEED))
 }
 
 /// Ticks `game` `ticks` times with `input` and returns the tick, from
@@ -126,7 +126,7 @@ fn a_sparx_cut_off_by_a_claim_snaps_back_to_the_border() {
     // half, where the Sparx walks.
     let (board, qix) = penned(W, CUT_H, CUT_COLUMN);
     let walker = sparx(Point::new(0, 1), Dir::Down);
-    let mut game = Game::with_board(board, qix, vec![walker], Rng::new(SEED));
+    let mut game = Game::with_board(board, vec![qix], vec![walker], Rng::new(SEED));
 
     draw(&mut game, Dir::Up, DrawKind::Fast, u32::from(CUT_H));
 

@@ -6,6 +6,9 @@ use crate::geometry::{Dir, Point};
 use crate::rng::Rng;
 use crate::stix::Stix;
 
+/// The headings of the two Sparx of a pair, first to last.
+const PAIR: [Dir; 2] = [Dir::Left, Dir::Right];
+
 /// What a Sparx is allowed to walk on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SparxKind {
@@ -31,7 +34,7 @@ impl Sparx {
     /// and the other right.
     pub fn spawn_pair(board: &Board) -> [Self; 2] {
         let pos = top_centre(board);
-        [Dir::Left, Dir::Right].map(|dir| Self {
+        PAIR.map(|dir| Self {
             pos,
             dir,
             kind: SparxKind::Normal,
@@ -43,15 +46,27 @@ impl Sparx {
     /// left and right in turn, the first left.
     pub fn spawn_at_top(board: &Board, count: usize) -> impl Iterator<Item = Self> {
         let pos = top_centre(board);
-        [Dir::Left, Dir::Right]
-            .into_iter()
-            .cycle()
-            .take(count)
-            .map(move |dir| Self {
-                pos,
-                dir,
+        PAIR.into_iter().cycle().take(count).map(move |dir| Self {
+            pos,
+            dir,
+            kind: SparxKind::Normal,
+        })
+    }
+
+    /// The `count` [`SparxKind::Normal`] Sparx of a level start, in pairs
+    /// spread evenly along `board`'s top edge (each on the border point
+    /// nearest its spot), the first of each pair heading left and the
+    /// second right; an odd count leaves the last pair one short. Two
+    /// Sparx are the [`Sparx::spawn_pair`].
+    pub fn spawn_level(board: &Board, count: usize) -> Vec<Self> {
+        let pairs = count.div_ceil(PAIR.len());
+        (0..count)
+            .map(|i| Self {
+                pos: top_point(board, spread(board.width(), i / PAIR.len(), pairs)),
+                dir: PAIR[i % PAIR.len()],
                 kind: SparxKind::Normal,
             })
+            .collect()
     }
 
     /// Moves one step along a border edge of `board`: straight on when it
@@ -134,8 +149,21 @@ where
 /// The border point of `board` nearest the centre of its top edge, or
 /// that centre when the board has no border.
 fn top_centre(board: &Board) -> Point {
-    let centre = Point::new(board.width() / 2, 0);
-    nearest_border_point(board, centre).unwrap_or(centre)
+    top_point(board, board.width() / 2)
+}
+
+/// The border point of `board` nearest point `x` of its top edge, or that
+/// point when the board has no border.
+fn top_point(board: &Board, x: u16) -> Point {
+    let point = Point::new(x, 0);
+    nearest_border_point(board, point).unwrap_or(point)
+}
+
+/// The `index`th of `count` points spread evenly across `width`, the ends
+/// excluded: `width * (index + 1) / (count + 1)`, rounded down.
+fn spread(width: u16, index: usize, count: usize) -> u16 {
+    let point = usize::from(width) * (index + 1) / (count + 1);
+    u16::try_from(point).unwrap_or(width)
 }
 
 /// The border point of `board` the fewest lattice steps (the Manhattan
