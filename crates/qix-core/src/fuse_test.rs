@@ -128,13 +128,14 @@ fn the_lit_fuse_burns_one_segment_every_step_ticks() {
 fn the_fuse_reaching_the_marker_kills_on_every_tick_it_is_there() {
     let mut game = up_right_up();
     let burn = FUSE_DELAY_TICKS + FUSE_STEP_TICKS * UP_RIGHT_UP_HEAD as u32;
-    let deaths: Vec<u32> = (1..=burn + 1)
+    let watch = burn + FUSE_STEP_TICKS;
+    let deaths: Vec<u32> = (1..=watch)
         .filter(|_| {
             game.tick(&InputState::default());
             fuse_death(&game)
         })
         .collect();
-    assert_eq!(deaths, [burn, burn + 1]);
+    assert_eq!(deaths, (burn..=watch).collect::<Vec<_>>());
     assert_eq!(game.fuse(), fuse_at(UP_RIGHT_UP_HEAD));
 }
 
@@ -155,6 +156,18 @@ fn a_step_puts_the_fuse_out_and_the_next_one_lights_at_the_start() {
     assert_eq!(game.fuse(), fuse_at(1));
     draw(&mut game, Dir::Up, 1);
     assert_eq!(game.fuse(), None);
+    stand(&mut game, FUSE_DELAY_TICKS - 1);
+    assert_eq!(game.fuse(), None);
+    stand(&mut game, 1);
+    assert_eq!(game.fuse(), fuse_at(0));
+}
+
+#[test]
+fn a_step_while_the_fuse_is_out_restarts_the_delay() {
+    let mut game = fuse_game();
+    draw(&mut game, Dir::Up, 2);
+    stand(&mut game, FUSE_DELAY_TICKS - 1);
+    draw(&mut game, Dir::Up, 1);
     stand(&mut game, FUSE_DELAY_TICKS - 1);
     assert_eq!(game.fuse(), None);
     stand(&mut game, 1);

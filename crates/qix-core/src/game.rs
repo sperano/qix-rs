@@ -144,7 +144,7 @@ impl Game {
     /// puts it out when the marker stepped from `marker_from` this tick or
     /// has no stix; a marker caught in a dead end lights it at once.
     /// Returns whether the fuse is at the marker: it stays there, raising
-    /// a death every tick, until the marker leaves the stix.
+    /// a death every tick, until the marker steps or the stix closes.
     fn burn_fuse(&mut self, marker_from: Point) -> bool {
         let Some(stix) = &self.stix else {
             self.fuse.put_out();

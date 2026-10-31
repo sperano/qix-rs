@@ -129,7 +129,7 @@ pub fn legal_step(marker: &Marker, stix: &Stix, board: &Board, dir: Dir) -> Opti
 }
 
 /// The directions the marker may draw in, in the order of [`Dir::ALL`].
-/// None means it is caught in a dead end (the "spiral death trap").
+/// An empty result means it is caught in a dead end (the "spiral death trap").
 pub fn legal_moves(marker: &Marker, stix: &Stix, board: &Board) -> Vec<Dir> {
     Dir::ALL
         .into_iter()
