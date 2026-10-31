@@ -37,8 +37,9 @@ impl Sparx {
         })
     }
 
-    /// Moves one step along a border edge of `board`, chosen by [`turn`];
-    /// a Sparx with no border edge stays put.
+    /// Moves one step along a border edge of `board`: straight on when it
+    /// can, else a random sideways edge, back only at a dead end; a Sparx
+    /// with no border edge stays put.
     pub fn step(&mut self, board: &Board, rng: &mut Rng) {
         let edges = || board.border_neighbours(self.pos).map(|(dir, _)| dir);
         let Some(dir) = turn(self.dir, edges, rng) else {
@@ -50,9 +51,10 @@ impl Sparx {
         }
     }
 
-    /// Moves to the border point of `board` nearest the Sparx's point, as
-    /// [`nearest_border_point`] picks it, when that point is no longer on
-    /// the border; its heading is kept.
+    /// Moves to the border point of `board` nearest the Sparx's point (the
+    /// fewest lattice steps away, the first in reading order among equally
+    /// near ones) when that point is no longer on the border; its heading
+    /// is kept.
     pub fn snap_to_border(&mut self, board: &Board) {
         if board.is_border(self.pos) {
             return;
@@ -97,7 +99,7 @@ where
 /// The border point of `board` the fewest lattice steps (the Manhattan
 /// distance) from `point`, the first in reading order among equally near
 /// ones; `None` when the board has no border.
-pub fn nearest_border_point(board: &Board, point: Point) -> Option<Point> {
+pub(crate) fn nearest_border_point(board: &Board, point: Point) -> Option<Point> {
     let (w, h) = (board.width(), board.height());
     (0..=h)
         .flat_map(|y| (0..=w).map(move |x| Point::new(x, y)))
