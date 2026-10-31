@@ -1,9 +1,12 @@
 use eframe::egui::{self, Pos2, Rect, Shape, Vec2, pos2, vec2};
 use qix_core::tuning::MARKER_STEP_TICKS;
 use qix_core::tuning::{BOARD_H, BOARD_W};
-use qix_core::{Cell, Dir, DrawKind, Game, InputState};
+use qix_core::{Board, Cell, Dir, DrawKind, Game, InputState, Qix, Rng};
 
 use crate::playfield::{letterbox, playfield_units, show, to_screen};
+
+/// Seed of every game the tests play.
+const SEED: u64 = 1;
 
 /// Tolerance for comparing screen coordinates, in points.
 const EPSILON: f32 = 1e-3;
@@ -101,9 +104,11 @@ fn count(shapes: &[Shape], kind: fn(&Shape) -> bool) -> usize {
 
 #[test]
 fn the_playfield_paints_the_claimed_cells_border_and_marker() {
-    let mut board = Game::new().board().clone();
+    let mut board = Board::new(BOARD_W, BOARD_H);
     board.set_cell(0, 0, Cell::Claimed(DrawKind::Slow));
-    let mut game = Game::with_board(board);
+    let mut rng = Rng::new(SEED);
+    let qix = Qix::spawn(&board, &mut rng);
+    let mut game = Game::with_board(board, qix, Vec::new(), rng);
     game.tick(&InputState::default());
     let shapes = painted(&game, false);
     let meshes = count(&shapes, |s| matches!(s, Shape::Mesh(m) if !m.is_empty()));
@@ -118,13 +123,13 @@ fn the_playfield_paints_the_claimed_cells_border_and_marker() {
 
 #[test]
 fn the_overlay_adds_its_text() {
-    let shapes = painted(&Game::new(), true);
+    let shapes = painted(&Game::new(Rng::new(SEED)), true);
     assert_eq!(count(&shapes, |s| matches!(s, Shape::Text(_))), 1);
 }
 
 #[test]
 fn a_stix_being_drawn_is_painted_as_a_line() {
-    let mut game = Game::new();
+    let mut game = Game::new(Rng::new(SEED));
     let drawing_up = InputState {
         dir: Some(Dir::Up),
         fast: true,

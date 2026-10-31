@@ -27,6 +27,7 @@ impl Default for QixApp {
             game: Game::new(Rng::new(clock_seed())),
             timestep: FixedTimestep::default(),
             input: InputLatch::default(),
+            overlay: false,
         }
     }
 }
