@@ -51,7 +51,7 @@ fn game_with(claimed: usize, sparx: Vec<Sparx>) -> Game {
     for &(x, y) in &CLAIMED_BEFORE[..claimed] {
         board.set_cell(x, y, Cell::Claimed(DrawKind::Fast));
     }
-    Game::with_board(board, qix_at((0, 0)), sparx, Rng::new(SEED))
+    Game::with_board(board, vec![qix_at((0, 0))], sparx, Rng::new(SEED))
 }
 
 /// A [`game_with`] no Sparx.
@@ -151,7 +151,7 @@ fn a_completed_level_no_longer_ticks() {
 #[test]
 fn the_completing_claim_puts_the_fuse_out() {
     let (board, qix) = penned(W, FUSE_H, 0);
-    let mut game = Game::with_board(board, qix, Vec::new(), Rng::new(SEED));
+    let mut game = Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED));
     game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.start()));
     draw(&mut game, Dir::Up, DrawKind::Fast, u32::from(FUSE_H) - 1);
     hold(&mut game, InputState::default(), FUSE_DELAY_TICKS);
@@ -174,7 +174,7 @@ fn nothing_moves_after_the_completing_claim_in_its_tick() {
     hold(&mut game, input, ticks - 1);
     hold(&mut below, input, ticks - 1);
     assert!(!game.is_level_complete(), "the level completed early");
-    let last = (game.qix().clone(), game.sparx().to_vec());
+    let last = (game.qix().to_vec(), game.sparx().to_vec());
 
     game.tick(&input);
     below.tick(&input);
@@ -187,10 +187,10 @@ fn nothing_moves_after_the_completing_claim_in_its_tick() {
             fraction: FRACTION_AFTER
         }]
     );
-    assert_eq!((game.qix(), game.sparx()), (&last.0, &last.1[..]));
+    assert_eq!((game.qix(), game.sparx()), (&last.0[..], &last.1[..]));
     assert_ne!(
         below.qix(),
-        &last.0,
+        last.0,
         "the Qix stands still below the threshold"
     );
     assert_ne!(

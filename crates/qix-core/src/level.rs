@@ -1,6 +1,13 @@
-//! Completing a level: the claim threshold and the bonus above it.
+//! Levels: how hard each one is, and completing one at the claim
+//! threshold with the bonus above it.
 
-use crate::tuning::{BONUS_PER_PERCENT, CLAIM_THRESHOLD_DEFAULT, CLAIM_THRESHOLD_RANGE};
+use std::ops::RangeInclusive;
+
+use crate::tuning::{
+    BONUS_PER_PERCENT, CLAIM_THRESHOLD_DEFAULT, CLAIM_THRESHOLD_RANGE, DIFFICULTY_RAMP_LEVELS,
+    FIRST_LEVEL, LEVEL_SPARX, LEVELS_PER_EXTRA_SPARX, QIX_SPEED, QIX_SPEED_PER_LEVEL,
+    SPARX_METER_TICKS, SPARX_METER_TICKS_PER_LEVEL, TWO_QIX_FROM_LEVEL,
+};
 
 /// Percent points in a whole board.
 const PERCENT: f64 = 100.0;
@@ -10,6 +17,56 @@ const PERCENT: f64 = 100.0;
 /// percent, such as 76 % stored a hair below `0.76`, yet stays well
 /// under the share of one cell of a full board.
 const PERCENT_ROUNDING_SLACK: f64 = 1e-4;
+
+/// Qix of a level before [`TWO_QIX_FROM_LEVEL`], and from it on.
+const ONE_QIX: usize = 1;
+const TWO_QIX: usize = 2;
+
+// The meter's countdowns stay positive at the end of the ramp.
+const _: () = assert!(SPARX_METER_TICKS > DIFFICULTY_RAMP_LEVELS * SPARX_METER_TICKS_PER_LEVEL);
+
+/// How hard a level is: what [`crate::Game::start_level`] sets it up
+/// with.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LevelConfig {
+    /// The speeds each Qix keeps its midpoint within, in playfield units
+    /// per tick.
+    pub qix_speed: RangeInclusive<f32>,
+    /// The Qix on the board.
+    pub qix_count: usize,
+    /// The Sparx on the border at the start of the level.
+    pub sparx_count: usize,
+    /// Ticks of each of the Sparx meter's two countdowns.
+    pub meter_ticks: u32,
+}
+
+impl LevelConfig {
+    /// The configuration of level `level`, counted from [`FIRST_LEVEL`]
+    /// (a lower one plays as the first). Each level of the
+    /// [`DIFFICULTY_RAMP_LEVELS`] after the first raises the Qix's speed
+    /// by [`QIX_SPEED_PER_LEVEL`] and shortens the meter by
+    /// [`SPARX_METER_TICKS_PER_LEVEL`], and every
+    /// [`LEVELS_PER_EXTRA_SPARX`] of them add a Sparx; later levels are as
+    /// hard as the last of the ramp. There are two Qix from
+    /// [`TWO_QIX_FROM_LEVEL`] on.
+    pub fn for_level(level: u32) -> Self {
+        let ramp = level
+            .saturating_sub(FIRST_LEVEL)
+            .min(DIFFICULTY_RAMP_LEVELS);
+        let speedup = ramp as f32 * QIX_SPEED_PER_LEVEL;
+        let extra_sparx = (ramp / LEVELS_PER_EXTRA_SPARX) as usize;
+        Self {
+            qix_speed: QIX_SPEED.start() + speedup..=QIX_SPEED.end() + speedup,
+            qix_count: if level >= TWO_QIX_FROM_LEVEL {
+                TWO_QIX
+            } else {
+                ONE_QIX
+            },
+            sparx_count: LEVEL_SPARX + extra_sparx,
+            meter_ticks: SPARX_METER_TICKS - ramp * SPARX_METER_TICKS_PER_LEVEL,
+        }
+    }
+}
 
 /// The claimed fraction of the board that completes a level, always in
 /// [`CLAIM_THRESHOLD_RANGE`].

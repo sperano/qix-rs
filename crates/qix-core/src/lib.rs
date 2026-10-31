@@ -73,7 +73,7 @@ pub use fuse::Fuse;
 pub use game::Game;
 pub use geometry::{Dir, Point, segments_intersect};
 pub use input::InputState;
-pub use level::ClaimThreshold;
+pub use level::{ClaimThreshold, LevelConfig};
 pub use marker::{Marker, MarkerState};
 pub use qix::Qix;
 pub use rng::Rng;

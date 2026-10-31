@@ -1,5 +1,7 @@
 //! The game state and its fixed-step update.
 
+mod level_start;
+
 use crate::board::{Board, DrawKind};
 use crate::collision::{qix_hits_marker, qix_hits_stix};
 use crate::event::{DeathCause, Event};
@@ -15,7 +17,7 @@ use crate::sparx::{Sparx, SparxKind};
 use crate::sparx_meter::{MeterExpiry, SparxMeter};
 use crate::stix::{Stix, legal_moves, legal_step};
 use crate::tuning::{
-    BOARD_H, BOARD_W, EXTRA_SPARX, MARKER_STEP_TICKS, RESPAWN_GRACE_TICKS, SLOW_STEP_TICKS,
+    EXTRA_SPARX, FIRST_LEVEL, MARKER_STEP_TICKS, RESPAWN_GRACE_TICKS, SLOW_STEP_TICKS,
     SPARX_METER_TICKS, SPARX_STEP_TICKS, STARTING_LIVES, STARTING_MULTIPLIER,
     SUPER_SPARX_STEP_TICKS,
 };
@@ -24,6 +26,8 @@ use crate::tuning::{
 #[derive(Debug)]
 pub struct Game {
     ticks: u64,
+    /// The level being played, from [`FIRST_LEVEL`] on.
+    level: u32,
     board: Board,
     marker: Marker,
     /// The stix being drawn: `Some` exactly while the marker is
@@ -33,7 +37,7 @@ pub struct Game {
     marker_held_ticks: u32,
     /// The fuse of the stix, out while the marker steps.
     fuse: FuseTimer,
-    qix: Qix,
+    qix: Vec<Qix>,
     sparx: Vec<Sparx>,
     /// Ticks since the Sparx on the border last stepped.
     sparx_ticks: u32,
@@ -64,24 +68,15 @@ pub struct Game {
 }
 
 impl Game {
-    /// A game that has not ticked yet: a free `BOARD_W x BOARD_H` board
-    /// with the marker at the centre of its bottom edge, a Qix spawned at
-    /// its centre and the [`Sparx::spawn_pair`] at the centre of its top
-    /// edge, every random choice drawn from `rng`.
-    pub fn new(mut rng: Rng) -> Self {
-        let board = Board::new(BOARD_W, BOARD_H);
-        let qix = Qix::spawn(&board, &mut rng);
-        let sparx = Sparx::spawn_pair(&board).to_vec();
-        Self::with_board(board, qix, sparx, rng)
-    }
-
-    /// A game on `board`, with the marker at the centre of its bottom
-    /// edge, `qix`, which must lie on free cells, and `sparx`, which must
-    /// lie on the border, drawing from `rng`.
-    pub fn with_board(board: Board, qix: Qix, sparx: Vec<Sparx>, rng: Rng) -> Self {
+    /// A game at [`FIRST_LEVEL`] on `board`, with the marker at the
+    /// centre of its bottom edge, `qix`, which must lie on free cells, and
+    /// `sparx`, which must lie on the border, drawing from `rng`; its
+    /// Sparx meter counts down the first level's [`SPARX_METER_TICKS`].
+    pub fn with_board(board: Board, qix: Vec<Qix>, sparx: Vec<Sparx>, rng: Rng) -> Self {
         let marker = Marker::start(&board);
         Self {
             ticks: 0,
+            level: FIRST_LEVEL,
             board,
             marker,
             stix: None,
@@ -105,7 +100,7 @@ impl Game {
     }
 
     /// Advances the game by one step of `1 / TICK_HZ` seconds: the marker
-    /// moves, then the fuse burns, then the Qix moves, then the Sparx
+    /// moves, then the fuse burns, then each Qix moves, then the Sparx
     /// meter counts down (see [`Game::sparx_meter`]), then the Sparx; a
     /// Qix touching the stix or the drawing marker kills the player, else
     /// a Sparx touching the marker does, else the fuse at the marker; one
@@ -135,7 +130,9 @@ impl Game {
             return;
         }
         let fuse_hit = self.burn_fuse(marker_from);
-        self.qix.tick(&self.board, &mut self.rng);
+        for qix in &mut self.qix {
+            qix.tick(&self.board, &mut self.rng);
+        }
         self.run_sparx_meter();
         let sparx_hit = self.move_sparx(marker_from) && !grace;
         let cause = if self.qix_hits_player() {
@@ -175,8 +172,13 @@ impl Game {
         self.fuse.fuse()
     }
 
-    /// The Qix.
-    pub fn qix(&self) -> &Qix {
+    /// The level being played, from [`FIRST_LEVEL`] on.
+    pub fn level(&self) -> u32 {
+        self.level
+    }
+
+    /// The Qix, one or two depending on the level.
+    pub fn qix(&self) -> &[Qix] {
         &self.qix
     }
 
@@ -290,11 +292,13 @@ impl Game {
         }
     }
 
-    /// The Qix touches the stix or the marker drawing it; a marker on the
+    /// A Qix touches the stix or the marker drawing it; a marker on the
     /// border has no stix and is never hit.
     fn qix_hits_player(&self) -> bool {
         self.stix.as_ref().is_some_and(|stix| {
-            qix_hits_stix(&self.qix, stix) || qix_hits_marker(&self.qix, self.marker.pos)
+            self.qix
+                .iter()
+                .any(|qix| qix_hits_stix(qix, stix) || qix_hits_marker(qix, self.marker.pos))
         })
     }
 
@@ -389,7 +393,7 @@ impl Game {
     /// marker where it is.
     ///
     /// A step onto a border point closes the stix: the area it cuts off
-    /// from the Qix is claimed and scored, the stix is dropped and its fuse
+    /// from every Qix is claimed and scored, the stix is dropped and its fuse
     /// put out, the marker is back on the border, at the closing point, and
     /// a Sparx the claim left off the border (one that was on the stix, or
     /// one the claim cut off) snaps back to it. A claim
@@ -406,9 +410,7 @@ impl Game {
         stix.push(next, kind);
         self.marker.pos = next;
         if self.board.is_border(next) {
-            let close = self
-                .board
-                .close_stix(&stix, std::slice::from_ref(&self.qix));
+            let close = self.board.close_stix(&stix, &self.qix);
             if let Some(claim) = close.claim {
                 self.score.add(score_for_claim(&claim, self.multiplier));
                 self.check_level_complete(claim.fraction);

@@ -70,7 +70,7 @@ fn sparx(kind: SparxKind) -> Sparx {
 /// A game on a [`penned`] board with one Sparx of `kind`.
 fn game_with(kind: SparxKind) -> Game {
     let (board, qix) = penned(W, H, PEN_COLUMN);
-    Game::with_board(board, qix, vec![sparx(kind)], Rng::new(SEED))
+    Game::with_board(board, vec![qix], vec![sparx(kind)], Rng::new(SEED))
 }
 
 /// What one tick of [`watch`] saw.
@@ -241,7 +241,7 @@ fn a_sparx_on_the_stix_snaps_to_the_border_on_a_fuse_death() {
         dir: Dir::Left,
         kind: SparxKind::Super,
     };
-    let mut game = Game::with_board(board, qix, vec![chaser], Rng::new(SEED));
+    let mut game = Game::with_board(board, vec![qix], vec![chaser], Rng::new(SEED));
     draw(&mut game, Dir::Up, DrawKind::Fast, FUSE_STIX_STEPS);
     let standing = FUSE_DEATH_TICK - 1 - FUSE_STIX_STEPS * MARKER_STEP_TICKS;
     hold(&mut game, InputState::default(), standing);

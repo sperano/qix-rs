@@ -197,7 +197,7 @@ fn new_game() -> Game {
         ..chaser
     };
     let sparx = vec![normal, chaser];
-    let mut game = Game::with_board(board, qix, sparx, qix_core::Rng::new(QIX_SEED));
+    let mut game = Game::with_board(board, vec![qix], sparx, qix_core::Rng::new(QIX_SEED));
     game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.end()));
     game
 }

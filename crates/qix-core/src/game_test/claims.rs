@@ -29,7 +29,7 @@ fn walled_board(column: u16) -> Board {
 /// the middle of the column, too long to turn between its walls.
 fn game_with_qix_in(column: u16) -> Game {
     let (board, qix) = penned(W, H, column);
-    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
+    Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED))
 }
 
 /// Draws the stix up from the marker's start to the top edge.
@@ -52,7 +52,7 @@ fn close_from_top(game: &mut Game) {
 /// side is claimed.
 fn assert_qix_side_kept(game: &Game, column: u16) {
     let qix_left = column < W / 2;
-    let (cell_x, _) = game.qix().cell();
+    let (cell_x, _) = game.qix()[0].cell();
     assert_eq!(cell_x, column, "the Qix left its column");
     let kept = walled_board(column);
     for y in 0..H {

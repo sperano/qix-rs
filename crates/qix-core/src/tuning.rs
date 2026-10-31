@@ -23,8 +23,8 @@ pub const SLOW_STEP_TICKS: u32 = 2 * MARKER_STEP_TICKS;
 /// Length of the Qix's segment, in playfield units.
 pub const QIX_LENGTH: f32 = 16.0;
 
-/// The speed of the Qix's midpoint, in playfield units per tick: random
-/// jitter changes it, within these bounds.
+/// The speed of the Qix's midpoint at the first level, in playfield units
+/// per tick: random jitter changes it, within these bounds.
 pub const QIX_SPEED: RangeInclusive<f32> = 0.3..=0.8;
 
 /// The most the Qix's velocity changes by in one tick, on each axis, in
@@ -89,9 +89,35 @@ pub const CLAIM_THRESHOLD_RANGE: RangeInclusive<f32> = 0.50..=0.90;
 /// claimed above the threshold.
 pub const BONUS_PER_PERCENT: u32 = 1000;
 
-/// Ticks of each of the Sparx meter's two countdowns at the default
-/// level: thirty seconds.
+/// Ticks of each of the Sparx meter's two countdowns at the first level:
+/// thirty seconds.
 pub const SPARX_METER_TICKS: u32 = 30 * TICK_HZ;
+
+/// The level a game starts at; levels count up from it.
+pub const FIRST_LEVEL: u32 = 1;
+
+/// Levels after the first over which the game gets harder: from level
+/// `FIRST_LEVEL + DIFFICULTY_RAMP_LEVELS` on, every level is as hard as
+/// that one.
+pub const DIFFICULTY_RAMP_LEVELS: u32 = 10;
+
+/// How much both bounds of [`QIX_SPEED`] rise with each level of the
+/// ramp, in playfield units per tick: the top speed reaches one unit per
+/// tick at the end of it.
+pub const QIX_SPEED_PER_LEVEL: f32 = 0.02;
+
+/// The first level with two Qix instead of one.
+pub const TWO_QIX_FROM_LEVEL: u32 = 3;
+
+/// Sparx on the border at the start of the first level.
+pub const LEVEL_SPARX: usize = 2;
+
+/// Levels of the ramp per extra Sparx at the start of a level.
+pub const LEVELS_PER_EXTRA_SPARX: u32 = 2;
+
+/// How much shorter each level of the ramp makes the Sparx meter's
+/// countdowns: two seconds, down to ten at the end of it.
+pub const SPARX_METER_TICKS_PER_LEVEL: u32 = 2 * TICK_HZ;
 
 /// Sparx the Sparx meter releases at the top centre when it first runs
 /// out.

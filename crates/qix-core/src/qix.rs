@@ -3,6 +3,7 @@
 
 use std::collections::VecDeque;
 use std::f32::consts::TAU;
+use std::ops::RangeInclusive;
 
 use crate::board::Board;
 use crate::rng::Rng;
@@ -28,14 +29,17 @@ pub struct Qix {
     vel: Vec2,
     /// Turn of the segment about its midpoint per tick, in radians.
     spin: f32,
+    /// The speeds the midpoint keeps within.
+    speed: RangeInclusive<f32>,
     /// The last [`QIX_TRAIL_LEN`] segments, oldest first; the newest is
     /// the current one.
     trail: VecDeque<(Vec2, Vec2)>,
 }
 
 impl Qix {
-    /// A Qix on the segment from `a` to `b`, with `vel` and `spin`; its
-    /// trail holds that one segment.
+    /// A Qix on the segment from `a` to `b`, with `vel` and `spin`, kept
+    /// within the first level's [`QIX_SPEED`]; its trail holds that one
+    /// segment.
     ///
     /// Nothing is checked: the caller puts it on free cells of the board
     /// it will tick on.
@@ -48,6 +52,7 @@ impl Qix {
             length: (b - a).length(),
             vel,
             spin,
+            speed: QIX_SPEED,
             trail,
         }
     }
@@ -59,11 +64,23 @@ impl Qix {
     /// The cells it covers must be free.
     pub fn spawn(board: &Board, rng: &mut Rng) -> Self {
         let centre = Vec2::new(f32::from(board.width()), f32::from(board.height())) * 0.5;
+        Self::spawn_at(centre, QIX_SPEED, rng)
+    }
+
+    /// A [`QIX_LENGTH`] Qix centred on `centre`, at a random angle,
+    /// heading a random way at a random speed within `speed`, which it
+    /// keeps within from then on, with a random spin.
+    ///
+    /// The cells it covers must be free.
+    pub fn spawn_at(centre: Vec2, speed: RangeInclusive<f32>, rng: &mut Rng) -> Self {
         let half = Vec2::from_angle(rng.range_f32(0.0, TAU)) * (QIX_LENGTH * 0.5);
-        let speed = rng.range_f32(*QIX_SPEED.start(), *QIX_SPEED.end());
-        let vel = Vec2::from_angle(rng.range_f32(0.0, TAU)) * speed;
+        let initial_speed = rng.range_f32(*speed.start(), *speed.end());
+        let vel = Vec2::from_angle(rng.range_f32(0.0, TAU)) * initial_speed;
         let spin = rng.range_f32(-QIX_MAX_SPIN, QIX_MAX_SPIN);
-        Self::new(centre - half, centre + half, vel, spin)
+        Self {
+            speed,
+            ..Self::new(centre - half, centre + half, vel, spin)
+        }
     }
 
     /// One endpoint of the segment.
@@ -84,6 +101,11 @@ impl Qix {
     /// The turn of the segment per tick, in radians.
     pub fn spin(&self) -> f32 {
         self.spin
+    }
+
+    /// The speeds the midpoint keeps within, in playfield units per tick.
+    pub fn speed(&self) -> &RangeInclusive<f32> {
+        &self.speed
     }
 
     /// The last segments, oldest first, the current one last; at most
@@ -112,13 +134,13 @@ impl Qix {
     }
 
     /// Kicks the velocity and the spin by random amounts, keeping the
-    /// speed within [`QIX_SPEED`] and the spin within [`QIX_MAX_SPIN`].
+    /// speed within [`Qix::speed`] and the spin within [`QIX_MAX_SPIN`].
     fn jitter(&mut self, rng: &mut Rng) {
         let kick = Vec2::new(
             rng.range_f32(-QIX_JITTER, QIX_JITTER),
             rng.range_f32(-QIX_JITTER, QIX_JITTER),
         );
-        self.vel = clamp_speed(self.vel + kick);
+        self.vel = clamp_speed(self.vel + kick, &self.speed);
         let spin = self.spin + rng.range_f32(-QIX_SPIN_JITTER, QIX_SPIN_JITTER);
         self.spin = spin.clamp(-QIX_MAX_SPIN, QIX_MAX_SPIN);
     }
@@ -160,14 +182,14 @@ impl Qix {
     }
 }
 
-/// `vel` scaled to the nearest speed within [`QIX_SPEED`]; a standstill
+/// `vel` scaled to the nearest speed within `bounds`; a standstill
 /// becomes the slowest speed along `x`.
-fn clamp_speed(vel: Vec2) -> Vec2 {
+fn clamp_speed(vel: Vec2, bounds: &RangeInclusive<f32>) -> Vec2 {
     let speed = vel.length();
     if speed > 0.0 {
-        vel * (speed.clamp(*QIX_SPEED.start(), *QIX_SPEED.end()) / speed)
+        vel * (speed.clamp(*bounds.start(), *bounds.end()) / speed)
     } else {
-        Vec2::new(*QIX_SPEED.start(), 0.0)
+        Vec2::new(*bounds.start(), 0.0)
     }
 }
 

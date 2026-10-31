@@ -4,6 +4,7 @@ use crate::{Board, Cell, Dir, DrawKind, Game, InputState, MarkerState, Point, Qi
 
 mod claims;
 mod deaths;
+mod level_start;
 mod levels;
 mod qix_hits;
 mod sparx_hits;
@@ -40,7 +41,7 @@ fn new_game() -> Game {
 /// A game on `board` with a short Qix in its top-left cell, which must be
 /// free.
 fn small_game(board: Board) -> Game {
-    Game::with_board(board, qix_at((0, 0)), Vec::new(), Rng::new(SEED))
+    Game::with_board(board, vec![qix_at((0, 0))], Vec::new(), Rng::new(SEED))
 }
 
 /// A free `width x height` board but for claimed walls beside `column`
@@ -392,7 +393,7 @@ fn a_draw_step_off_the_board_starts_no_stix() {
 #[test]
 fn reaching_the_border_closes_the_stix() {
     let (board, qix) = penned(PEN_W, PEN_H, PEN_COLUMN);
-    let mut game = Game::with_board(board, qix, Vec::new(), Rng::new(SEED));
+    let mut game = Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED));
     let start = game.marker().pos;
 
     draw(&mut game, Dir::Up, DrawKind::Fast, u32::from(PEN_H));

@@ -109,7 +109,7 @@ fn the_playfield_paints_the_claimed_cells_border_and_marker() {
     board.set_cell(0, 0, Cell::Claimed(DrawKind::Slow));
     let mut rng = Rng::new(SEED);
     let qix = Qix::spawn(&board, &mut rng);
-    let mut game = Game::with_board(board, qix, Vec::new(), rng);
+    let mut game = Game::with_board(board, vec![qix], Vec::new(), rng);
     game.tick(&InputState::default());
     let shapes = painted(&game, false);
     let meshes = count(&shapes, |s| matches!(s, Shape::Mesh(m) if !m.is_empty()));

@@ -65,7 +65,7 @@ pub(super) fn band_and_column() -> Game {
 pub(super) fn band_and_column_with(sparx: Vec<Sparx>) -> Game {
     let board = board_with(|x, y| y >= H - BAND_ROWS || x == COLUMN);
     let qix = column_qix(f32::from(COLUMN) + 0.5, 0.5, f32::from(H) - 1.0);
-    Game::with_board(board, qix, sparx, Rng::new(SEED))
+    Game::with_board(board, vec![qix], sparx, Rng::new(SEED))
 }
 
 /// Ticks `game` `ticks` times with `input` and returns the deaths the
@@ -91,7 +91,7 @@ fn falling_qix() -> Game {
         Vec2::new(0.0, FALL_SPEED),
         0.0,
     );
-    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
+    Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED))
 }
 
 /// Draws a stix up into the band, then `right` steps to the right, and
@@ -129,7 +129,7 @@ fn a_qix_crossing_a_horizontal_stix_kills() {
     assert_eq!(raised, [Event::Death(DeathCause::Qix)]);
     assert_eq!(u32::from(head.x), u32::from(COLUMN) + CLEAR_OF_COLUMN);
     assert!(
-        !qix_hits_marker(game.qix(), head),
+        !qix_hits_marker(&game.qix()[0], head),
         "the Qix touches the marker"
     );
 }
@@ -156,13 +156,13 @@ fn a_qix_next_to_a_marker_on_the_border_does_not_kill() {
     let board = board_with(|x, _| x == column);
     let length = f32::from(H) - 0.5;
     let qix = column_qix(f32::from(column) + 0.25, 0.25, length);
-    let mut game = Game::with_board(board, qix, Vec::new(), Rng::new(SEED));
+    let mut game = Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED));
     let mut touching_ticks = 0;
 
     for _ in 0..WATCH_TICKS {
         game.tick(&InputState::default());
         assert_eq!(game.events(), []);
-        touching_ticks += u32::from(qix_hits_marker(game.qix(), game.marker().pos));
+        touching_ticks += u32::from(qix_hits_marker(&game.qix()[0], game.marker().pos));
     }
 
     assert!(touching_ticks > 0, "the Qix never came near the marker");
