@@ -11,11 +11,12 @@ use crate::marker::{Marker, MarkerState};
 use crate::qix::Qix;
 use crate::rng::Rng;
 use crate::score::{Score, score_for_claim};
-use crate::sparx::Sparx;
+use crate::sparx::{Sparx, SparxKind};
+use crate::sparx_meter::{MeterExpiry, SparxMeter};
 use crate::stix::{Stix, legal_moves, legal_step};
 use crate::tuning::{
-    BOARD_H, BOARD_W, MARKER_STEP_TICKS, RESPAWN_GRACE_TICKS, SLOW_STEP_TICKS, SPARX_STEP_TICKS,
-    STARTING_LIVES, STARTING_MULTIPLIER,
+    BOARD_H, BOARD_W, EXTRA_SPARX, MARKER_STEP_TICKS, RESPAWN_GRACE_TICKS, SLOW_STEP_TICKS,
+    SPARX_METER_TICKS, SPARX_STEP_TICKS, STARTING_LIVES, STARTING_MULTIPLIER,
 };
 
 /// The whole game, advanced one fixed step at a time.
@@ -35,6 +36,11 @@ pub struct Game {
     sparx: Vec<Sparx>,
     /// Ticks since the Sparx last stepped.
     sparx_ticks: u32,
+    /// The kinds of the Sparx the level started with, the first of
+    /// `sparx`: what a reset of the meter takes them back to.
+    level_sparx: Vec<SparxKind>,
+    /// Counts down to more Sparx, then to Super Sparx.
+    sparx_meter: SparxMeter,
     /// Every random choice of the game comes from here.
     rng: Rng,
     /// Lives left, the one being played included; the game is over at
@@ -79,8 +85,10 @@ impl Game {
             marker_held_ticks: 0,
             fuse: FuseTimer::default(),
             qix,
+            level_sparx: sparx.iter().map(|sparx| sparx.kind).collect(),
             sparx,
             sparx_ticks: 0,
+            sparx_meter: SparxMeter::new(SPARX_METER_TICKS),
             rng,
             lives: STARTING_LIVES,
             grace_ticks: 0,
@@ -93,7 +101,8 @@ impl Game {
     }
 
     /// Advances the game by one step of `1 / TICK_HZ` seconds: the marker
-    /// moves, then the fuse burns, then the Qix moves, then the Sparx; a
+    /// moves, then the fuse burns, then the Qix moves, then the Sparx
+    /// meter counts down (see [`Game::sparx_meter`]), then the Sparx; a
     /// Qix touching the stix or the drawing marker kills the player, else
     /// a Sparx touching the marker does, else the fuse at the marker; one
     /// death at most per tick. Once the game is over or the level
@@ -103,7 +112,7 @@ impl Game {
     /// [`Event::GameOver`] too: the stix and its fuse are cleared and the
     /// marker is back on the border where the stix began. For
     /// [`RESPAWN_GRACE_TICKS`] ticks after it, the Sparx cannot kill and
-    /// the marker cannot draw.
+    /// the marker cannot draw. A death also resets the Sparx meter.
     ///
     /// A claim that completes the level ends the tick: nothing moves
     /// after it.
@@ -122,6 +131,7 @@ impl Game {
         }
         let fuse_hit = self.burn_fuse(marker_from);
         self.qix.tick(&self.board, &mut self.rng);
+        self.run_sparx_meter();
         let sparx_hit = self.move_sparx(marker_from) && !grace;
         let cause = if self.qix_hits_player() {
             Some(DeathCause::Qix)
@@ -168,6 +178,20 @@ impl Game {
     /// The Sparx.
     pub fn sparx(&self) -> &[Sparx] {
         &self.sparx
+    }
+
+    /// The Sparx meter. Its first expiry releases [`EXTRA_SPARX`] more
+    /// Sparx at the top centre, its second turns every Sparx
+    /// [`SparxKind::Super`]. A death resets it and undoes both: the
+    /// released Sparx are gone and the others are back to the kinds the
+    /// level started them with.
+    pub fn sparx_meter(&self) -> SparxMeter {
+        self.sparx_meter
+    }
+
+    /// Replaces the Sparx meter, from the next tick on.
+    pub fn set_sparx_meter(&mut self, meter: SparxMeter) {
+        self.sparx_meter = meter;
     }
 
     /// The lives left, the one being played included.
@@ -226,10 +250,37 @@ impl Game {
         self.marker.state = MarkerState::OnBorder;
         self.marker_held_ticks = 0;
         self.fuse.put_out();
+        self.reset_sparx_meter();
         if self.is_over() {
             self.events.push(Event::GameOver);
         } else {
             self.grace_ticks = RESPAWN_GRACE_TICKS;
+        }
+    }
+
+    /// Counts the Sparx meter down one tick and applies its expiry, if
+    /// this tick brings one.
+    fn run_sparx_meter(&mut self) {
+        match self.sparx_meter.tick() {
+            Some(MeterExpiry::Release) => self
+                .sparx
+                .extend(Sparx::spawn_at_top(&self.board, EXTRA_SPARX)),
+            Some(MeterExpiry::Super) => {
+                for sparx in &mut self.sparx {
+                    sparx.kind = SparxKind::Super;
+                }
+            }
+            None => {}
+        }
+    }
+
+    /// Fills the Sparx meter again and undoes its expiries: the Sparx it
+    /// released are removed and the level's own are back to their kinds.
+    fn reset_sparx_meter(&mut self) {
+        self.sparx_meter.reset();
+        self.sparx.truncate(self.level_sparx.len());
+        for (sparx, &kind) in self.sparx.iter_mut().zip(&self.level_sparx) {
+            sparx.kind = kind;
         }
     }
 

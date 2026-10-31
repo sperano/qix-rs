@@ -250,3 +250,16 @@ fn a_sparx_next_to_the_marker_does_not_hit_it() {
 
     assert!(!sparx.hits_marker(Point::new(3, 0), marker, marker));
 }
+
+#[test]
+fn spawn_at_top_alternates_left_and_right_from_the_pair_point() {
+    let board = board_with(&[(W / 2 - 1, 0), (W / 2, 0)]);
+    let [pair, _] = Sparx::spawn_pair(&board);
+
+    let spawned: Vec<_> = Sparx::spawn_at_top(&board, 3).collect();
+
+    assert!(spawned.iter().all(|sparx| sparx.pos == pair.pos));
+    assert!(spawned.iter().all(|sparx| sparx.kind == SparxKind::Normal));
+    let dirs: Vec<_> = spawned.iter().map(|sparx| sparx.dir).collect();
+    assert_eq!(dirs, [Dir::Left, Dir::Right, Dir::Left]);
+}

@@ -21,6 +21,7 @@ pub mod rng;
 pub mod score;
 mod segment;
 pub mod sparx;
+pub mod sparx_meter;
 pub mod stix;
 pub mod tuning;
 pub mod vec2;
@@ -56,6 +57,8 @@ mod score_test;
 #[cfg(test)]
 mod segment_test;
 #[cfg(test)]
+mod sparx_meter_test;
+#[cfg(test)]
 mod sparx_test;
 #[cfg(test)]
 mod stix_test;
@@ -76,5 +79,6 @@ pub use qix::Qix;
 pub use rng::Rng;
 pub use score::{Score, score_for_claim};
 pub use sparx::{Sparx, SparxKind};
+pub use sparx_meter::{MeterExpiry, SparxMeter};
 pub use stix::Stix;
 pub use vec2::Vec2;

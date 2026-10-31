@@ -83,3 +83,11 @@ pub const CLAIM_THRESHOLD_RANGE: RangeInclusive<f32> = 0.50..=0.90;
 /// Points of the level bonus for each whole percent point of the board
 /// claimed above the threshold.
 pub const BONUS_PER_PERCENT: u32 = 1000;
+
+/// Ticks of each of the Sparx meter's two countdowns at the default
+/// level: thirty seconds.
+pub const SPARX_METER_TICKS: u32 = 30 * TICK_HZ;
+
+/// Sparx the Sparx meter releases at the top centre when it first runs
+/// out.
+pub const EXTRA_SPARX: usize = 2;
