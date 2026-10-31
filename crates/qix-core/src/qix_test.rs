@@ -18,6 +18,22 @@ const EPSILON: f32 = 1e-4;
 /// area of [`board_with_claims`], so the run exercises the bounces off them.
 const MIN_TICKS_BESIDE_EACH_CLAIM: u32 = 10;
 
+/// Offsets, within its cell, of the ends of the [`qix_at`] Qix.
+const STILL_QIX_ENDS: (f32, f32) = (0.25, 0.75);
+
+/// A still, short, level Qix across the middle of cell `(x, y)`, so its
+/// [`Qix::cell`] is `(x, y)`.
+pub(crate) fn qix_at((x, y): (u16, u16)) -> Qix {
+    let (x, mid_y) = (f32::from(x), f32::from(y) + 0.5);
+    let (left, right) = STILL_QIX_ENDS;
+    Qix::new(
+        Vec2::new(x + left, mid_y),
+        Vec2::new(x + right, mid_y),
+        Vec2::default(),
+        0.0,
+    )
+}
+
 /// The claimed block in the middle of [`board_with_claims`].
 fn in_block(x: i32, y: i32) -> bool {
     (60..100).contains(&x) && (40..80).contains(&y)

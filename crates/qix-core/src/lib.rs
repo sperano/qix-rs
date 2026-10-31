@@ -58,7 +58,7 @@ mod vec2_test;
 
 pub use bitset::BitSet;
 pub use board::{Board, Cell, DrawKind};
-pub use claim::ClaimResult;
+pub use claim::{ClaimResult, CloseResult};
 pub use event::{DeathCause, Event};
 pub use fuse::Fuse;
 pub use game::Game;

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use crate::qix_test::qix_at;
 use crate::sparx::{nearest_border_point, turn};
 use crate::{Board, Cell, Dir, DrawKind, Point, Rng, Sparx, SparxKind, Stix};
 
@@ -172,7 +173,7 @@ fn snaps_to_the_nearest_border_point_after_a_claim() {
     let mut board = Board::new(W, H);
     let mut stix = Stix::new(Point::new(2, 0));
     stix.push(Point::new(2, H), DrawKind::Fast);
-    board.close_stix(&stix, (W - 1, H / 2));
+    board.close_stix(&stix, &[qix_at((W - 1, H / 2))]);
     let mut cut_off = sparx(Point::new(0, 1), Dir::Down);
 
     cut_off.snap_to_border(&board);
