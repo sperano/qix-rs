@@ -17,6 +17,7 @@ pub mod input;
 pub mod marker;
 pub mod qix;
 pub mod rng;
+pub mod score;
 mod segment;
 pub mod sparx;
 pub mod stix;
@@ -48,6 +49,8 @@ mod qix_test;
 #[cfg(test)]
 mod rng_test;
 #[cfg(test)]
+mod score_test;
+#[cfg(test)]
 mod segment_test;
 #[cfg(test)]
 mod sparx_test;
@@ -67,6 +70,7 @@ pub use input::InputState;
 pub use marker::{Marker, MarkerState};
 pub use qix::Qix;
 pub use rng::Rng;
+pub use score::{Score, score_for_claim};
 pub use sparx::{Sparx, SparxKind};
 pub use stix::Stix;
 pub use vec2::Vec2;

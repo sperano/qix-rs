@@ -9,11 +9,12 @@ use crate::input::InputState;
 use crate::marker::{Marker, MarkerState};
 use crate::qix::Qix;
 use crate::rng::Rng;
+use crate::score::{Score, score_for_claim};
 use crate::sparx::Sparx;
 use crate::stix::{Stix, legal_moves, legal_step};
 use crate::tuning::{
     BOARD_H, BOARD_W, MARKER_STEP_TICKS, RESPAWN_GRACE_TICKS, SLOW_STEP_TICKS, SPARX_STEP_TICKS,
-    STARTING_LIVES,
+    STARTING_LIVES, STARTING_MULTIPLIER,
 };
 
 /// The whole game, advanced one fixed step at a time.
@@ -40,6 +41,10 @@ pub struct Game {
     lives: u32,
     /// Ticks of the grace period after a death still to run.
     grace_ticks: u32,
+    /// The points scored so far.
+    score: Score,
+    /// The multiplier of the points every claim scores.
+    multiplier: u32,
     /// What the last tick raised.
     events: Vec<Event>,
 }
@@ -74,6 +79,8 @@ impl Game {
             rng,
             lives: STARTING_LIVES,
             grace_ticks: 0,
+            score: Score::default(),
+            multiplier: STARTING_MULTIPLIER,
             events: Vec::new(),
         }
     }
@@ -158,6 +165,11 @@ impl Game {
     /// one included; zero outside it.
     pub fn grace_ticks(&self) -> u32 {
         self.grace_ticks
+    }
+
+    /// The points scored so far.
+    pub fn score(&self) -> Score {
+        self.score
     }
 
     /// The last life is lost: the game no longer ticks.
@@ -282,9 +294,9 @@ impl Game {
     /// marker where it is.
     ///
     /// A step onto a border point closes the stix: the area it cuts off
-    /// from the Qix is claimed, the stix is dropped, the marker is back on
-    /// the border, at the closing point, and a Sparx the claim took off
-    /// the border snaps back to it.
+    /// from the Qix is claimed and scored, the stix is dropped, the marker
+    /// is back on the border, at the closing point, and a Sparx the claim
+    /// took off the border snaps back to it.
     fn draw(&mut self, dir: Dir, kind: DrawKind) {
         let mut stix = self
             .stix
@@ -297,8 +309,12 @@ impl Game {
         stix.push(next, kind);
         self.marker.pos = next;
         if self.board.is_border(next) {
-            self.board
+            let close = self
+                .board
                 .close_stix(&stix, std::slice::from_ref(&self.qix));
+            if let Some(claim) = close.claim {
+                self.score.add(score_for_claim(&claim, self.multiplier));
+            }
             self.marker.state = MarkerState::OnBorder;
             for sparx in &mut self.sparx {
                 sparx.snap_to_border(&self.board);

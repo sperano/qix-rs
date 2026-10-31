@@ -62,3 +62,12 @@ pub const STARTING_LIVES: u32 = 3;
 /// Ticks after a death during which the Sparx cannot kill the marker and
 /// the marker cannot draw: two seconds.
 pub const RESPAWN_GRACE_TICKS: u32 = 2 * TICK_HZ;
+
+/// Points a claimed cell scores at a level multiplier of one, drawn fast.
+pub const POINTS_PER_CELL: u32 = 10;
+
+/// How many times the points of a fast claim a slow claim scores.
+pub const SLOW_DRAW_FACTOR: u32 = 2;
+
+/// The level multiplier a game starts with.
+pub const STARTING_MULTIPLIER: u32 = 1;
