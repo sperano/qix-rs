@@ -312,3 +312,14 @@ fn a_sparx_steps_along_the_stix_to_its_head_and_stays_there() {
     assert_eq!(points, [Point::new(W / 2, H - 1), stix.head(), stix.head()]);
     assert_eq!(chaser.dir, Dir::Up);
 }
+
+#[test]
+fn a_sparx_off_the_stix_does_not_step_along_it() {
+    let stix = stix_up(W / 2, 2);
+    let beside = sparx(Point::new(W / 2 + 1, H - 1), Dir::Left);
+    let mut stepped = beside;
+
+    stepped.step_along_stix(&stix);
+
+    assert_eq!(stepped, beside);
+}

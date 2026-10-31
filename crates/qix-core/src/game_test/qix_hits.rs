@@ -3,7 +3,9 @@
 use super::{SEED, drawing};
 use crate::collision::qix_hits_marker;
 use crate::tuning::MARKER_STEP_TICKS;
-use crate::{Board, Cell, DeathCause, Dir, DrawKind, Event, Game, InputState, Qix, Rng, Vec2};
+use crate::{
+    Board, Cell, DeathCause, Dir, DrawKind, Event, Game, InputState, Qix, Rng, Sparx, Vec2,
+};
 
 /// Dimensions of the boards: the marker starts at `(W / 2, H)`.
 const W: u16 = 20;
@@ -56,9 +58,14 @@ fn column_qix(x: f32, top: f32, length: f32) -> Qix {
 /// to the top edge, with a Qix along the column that crosses every row of
 /// the band.
 pub(super) fn band_and_column() -> Game {
+    band_and_column_with(Vec::new())
+}
+
+/// [`band_and_column`] with `sparx`.
+pub(super) fn band_and_column_with(sparx: Vec<Sparx>) -> Game {
     let board = board_with(|x, y| y >= H - BAND_ROWS || x == COLUMN);
     let qix = column_qix(f32::from(COLUMN) + 0.5, 0.5, f32::from(H) - 1.0);
-    Game::with_board(board, qix, Vec::new(), Rng::new(SEED))
+    Game::with_board(board, qix, sparx, Rng::new(SEED))
 }
 
 /// Ticks `game` `ticks` times with `input` and returns the deaths the

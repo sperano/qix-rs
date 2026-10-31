@@ -1,5 +1,5 @@
-//! The Sparx: enemies walking the border graph that kill the marker on
-//! contact.
+//! The Sparx: enemies walking the border graph, and Super ones the stix,
+//! that kill the marker on contact.
 
 use crate::board::Board;
 use crate::geometry::{Dir, Point};
@@ -16,7 +16,8 @@ pub enum SparxKind {
     Super,
 }
 
-/// A Sparx on a lattice point of the border, heading `dir`.
+/// A Sparx on a lattice point of the border, or of the stix while a
+/// [`SparxKind::Super`] one chases along it, heading `dir`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Sparx {
     pub pos: Point,

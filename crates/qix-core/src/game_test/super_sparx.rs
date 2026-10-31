@@ -1,7 +1,8 @@
 //! Super Sparx chasing the marker along the stix through [`Game::tick`].
 
-use super::{SEED, draw, penned};
-use crate::tuning::{SPARX_STEP_TICKS, SUPER_SPARX_STEP_TICKS};
+use super::qix_hits::{COLUMN, STEPS_UP, band_and_column, band_and_column_with};
+use super::{SEED, draw, drawing, penned};
+use crate::tuning::{MARKER_STEP_TICKS, SPARX_STEP_TICKS, SUPER_SPARX_STEP_TICKS};
 use crate::{DeathCause, Dir, DrawKind, Event, Game, InputState, Point, Rng, Sparx, SparxKind};
 
 /// Dimensions of the board: the marker starts at `(W / 2, H)`.
@@ -132,7 +133,10 @@ fn a_normal_sparx_does_not_enter_the_stix() {
     assert!(seen.iter().any(|seen| seen.pos.x < START.x), "{seen:?}");
     assert_eq!(on_the_stix(&seen), [], "{seen:?}");
     assert!(seen.iter().all(|seen| !seen.sparx_death), "{seen:?}");
-    assert!(seen.iter().all(|seen| game.board().is_border(seen.pos)));
+    assert!(
+        seen.iter().all(|seen| game.board().is_border(seen.pos)),
+        "{seen:?}"
+    );
 }
 
 #[test]
@@ -160,17 +164,45 @@ fn a_sparx_on_a_closed_stix_ends_on_the_border() {
     );
 
     // The last step reaches the top edge and turns the stix into border.
-    draw(&mut game, Dir::Up, DrawKind::Fast, 1);
+    let mut events = Vec::new();
+    for _ in 0..MARKER_STEP_TICKS {
+        game.tick(&drawing(Dir::Up, DrawKind::Fast));
+        events.extend_from_slice(game.events());
+    }
 
     let sparx = game.sparx()[0];
     assert!(game.stix().is_none());
     assert!(game.board().is_border(sparx.pos), "{sparx:?}");
     assert_eq!(sparx.pos.x, START.x, "{sparx:?}");
     assert!(
-        game.events()
-            .iter()
-            .all(|event| !matches!(event, Event::Death(_))),
-        "{:?}",
-        game.events()
+        events.iter().all(|event| !matches!(event, Event::Death(_))),
+        "{events:?}"
     );
+}
+
+#[test]
+fn a_sparx_on_the_stix_snaps_to_the_border_on_a_qix_death() {
+    let start = band_and_column().marker().pos;
+    let chaser = Sparx {
+        pos: Point::new(start.x + 1, start.y),
+        dir: Dir::Left,
+        kind: SparxKind::Super,
+    };
+    let mut game = band_and_column_with(vec![chaser]);
+    draw(&mut game, Dir::Up, DrawKind::Fast, STEPS_UP);
+
+    // Drawn fast, the marker keeps the chaser a step behind it until the
+    // stix crosses the Qix's column.
+    let past_column = u32::from(COLUMN - start.x) + 1;
+    let before_death = (1..=past_column * MARKER_STEP_TICKS).find_map(|_| {
+        let before = game.sparx()[0];
+        game.tick(&drawing(Dir::Right, DrawKind::Fast));
+        (!game.events().is_empty()).then_some(before)
+    });
+
+    let before = before_death.expect("the Qix never killed");
+    assert_eq!(game.events(), [Event::Death(DeathCause::Qix)]);
+    assert!(!game.board().is_border(before.pos), "{before:?}");
+    let sparx = game.sparx()[0];
+    assert!(game.board().is_border(sparx.pos), "{sparx:?}");
 }
