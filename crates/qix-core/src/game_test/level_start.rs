@@ -2,11 +2,11 @@
 //! [`Game::start_level`].
 
 use super::deaths::{die_by_fuse, stand};
-use super::{SEED, draw, new_game};
+use super::{H, SEED, W, draw, new_game};
 use crate::qix_test::qix_at;
 use crate::tuning::{
     BOARD_H, BOARD_W, CLAIM_THRESHOLD_RANGE, DIFFICULTY_RAMP_LEVELS, FIRST_LEVEL, POINTS_PER_CELL,
-    STARTING_LIVES, TWO_QIX_FROM_LEVEL,
+    STARTING_LIVES, STARTING_MULTIPLIER, TWO_QIX_FROM_LEVEL,
 };
 use crate::{
     Board, ClaimThreshold, Dir, DrawKind, Game, InputState, LevelConfig, MarkerState, Point, Rng,
@@ -218,4 +218,45 @@ fn starting_a_level_keeps_the_tick_count() {
     game.start_level(NEXT_LEVEL);
 
     assert_eq!(game.ticks(), 1);
+}
+
+#[test]
+fn a_restart_starts_a_new_game() {
+    let mut game = a_played_game();
+    game.start_level(NEXT_LEVEL);
+    game.set_multiplier(STARTING_MULTIPLIER + 1);
+    game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.start()));
+
+    game.restart();
+
+    assert_set_up_for(&game, FIRST_LEVEL);
+    assert_eq!(game.ticks(), 0);
+    assert_eq!(game.lives(), STARTING_LIVES);
+    assert_eq!(game.score().points(), 0);
+    assert_eq!(game.multiplier(), STARTING_MULTIPLIER);
+    assert_eq!(game.claim_threshold(), ClaimThreshold::default());
+}
+
+#[test]
+fn a_restart_frees_the_board() {
+    let mut game = a_played_game();
+    assert!(game.board().claimed_fraction() > 0.0, "nothing claimed");
+
+    game.restart();
+
+    assert_eq!(game.board(), &Board::new(BOARD_W, BOARD_H));
+}
+
+#[test]
+fn a_restart_keeps_the_size_of_the_board() {
+    let mut game = Game::with_board(
+        Board::new(W, H),
+        vec![qix_at((0, 0))],
+        Vec::new(),
+        Rng::new(SEED),
+    );
+
+    game.restart();
+
+    assert_eq!((game.board().width(), game.board().height()), (W, H));
 }

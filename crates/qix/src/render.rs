@@ -3,6 +3,7 @@
 pub mod board;
 pub mod enemies;
 pub mod overlay;
+pub mod screen;
 
 #[cfg(test)]
 mod board_test;
@@ -10,3 +11,5 @@ mod board_test;
 mod enemies_test;
 #[cfg(test)]
 mod overlay_test;
+#[cfg(test)]
+mod screen_test;

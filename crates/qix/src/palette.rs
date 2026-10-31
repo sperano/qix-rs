@@ -58,6 +58,18 @@ pub const OVERLAY_TEXT: Color32 = Color32::WHITE;
 /// through.
 pub const OVERLAY_BACKGROUND: Color32 = Color32::from_black_alpha(160);
 
+/// Over the playfield behind a screen, translucent so it stays visible.
+pub const SCREEN_DIM: Color32 = Color32::from_black_alpha(110);
+
+/// Behind a screen's text.
+pub const SCREEN_BACKGROUND: Color32 = Color32::from_black_alpha(200);
+
+/// A screen's heading.
+pub const SCREEN_HEADING: Color32 = MARKER;
+
+/// The lines under a screen's heading.
+pub const SCREEN_TEXT: Color32 = Color32::WHITE;
+
 /// The fill of cells claimed with `kind`.
 pub const fn fill(kind: DrawKind) -> Color32 {
     match kind {

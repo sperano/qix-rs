@@ -7,6 +7,7 @@ use qix_core::tuning::{BOARD_H, BOARD_W};
 
 use crate::palette;
 use crate::render;
+use crate::render::screen::Screen;
 
 /// Gap between the window edge and the playfield, in points; wider than
 /// the half of the border lines that lies outside the playfield.
@@ -41,14 +42,18 @@ pub fn to_screen(available: Rect) -> RectTransform {
 }
 
 /// Fills `ui` with the playfield: its background, `game`'s board and its
-/// enemies, with the debug overlay on top when `overlay` is set.
-pub fn show(ui: &mut egui::Ui, game: &Game, overlay: bool) {
+/// enemies, then `screen` over them, if any, and the debug overlay on top
+/// when `overlay` is set.
+pub fn show(ui: &mut egui::Ui, game: &Game, screen: Option<&Screen>, overlay: bool) {
     let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::hover());
     let to_screen = to_screen(response.rect);
     let field = to_screen.transform_rect(playfield_units());
     painter.rect_filled(field, 0.0, palette::PLAYFIELD_BACKGROUND);
     render::board::paint(&painter, to_screen, game);
     render::enemies::paint(&painter, to_screen, game);
+    if let Some(screen) = screen {
+        render::screen::paint(&painter, field, screen);
+    }
     if overlay {
         render::overlay::paint(&painter, field, game);
     }

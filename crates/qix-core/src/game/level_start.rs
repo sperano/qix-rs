@@ -21,6 +21,16 @@ impl Game {
         game
     }
 
+    /// Starts a new game on a free board of the same size, as
+    /// [`Game::new`] does: [`FIRST_LEVEL`], every life, no score, the
+    /// starting multiplier, the default claim threshold and no tick run.
+    /// Only the random sequence carries on.
+    pub fn restart(&mut self) {
+        let board = Board::new(self.board.width(), self.board.height());
+        *self = Self::with_board(board, Vec::new(), Vec::new(), self.rng.clone());
+        self.start_level(FIRST_LEVEL);
+    }
+
     /// Starts level `level` (a level below [`FIRST_LEVEL`] starts the
     /// first) as [`LevelConfig::for_level`] sets it up: a free board of
     /// the same size, the marker at the centre of its bottom edge, the
