@@ -14,6 +14,9 @@ const SEED: u64 = 1196;
 const W: u16 = 8;
 const H: u16 = 5;
 
+/// Ticks a stix step holds its direction before the marker moves.
+const HELD_TICKS: u32 = MARKER_STEP_TICKS - 1;
+
 /// Index of the head of a stix drawn up, right, then up.
 const UP_RIGHT_UP_HEAD: usize = 3;
 
@@ -166,8 +169,13 @@ fn a_step_puts_the_fuse_out_and_the_next_one_lights_at_the_start() {
 fn a_step_while_the_fuse_is_out_restarts_the_delay() {
     let mut game = fuse_game();
     draw(&mut game, Dir::Up, 2);
-    stand(&mut game, FUSE_DELAY_TICKS - 1);
+    // The ticks a step holds its direction before the marker moves count
+    // as standing. Leave room for those of the last step and the next one,
+    // so the fuse stays out through the step even if the last step did not
+    // restart the delay.
+    stand(&mut game, FUSE_DELAY_TICKS - 1 - 2 * HELD_TICKS);
     draw(&mut game, Dir::Up, 1);
+    assert_eq!(game.fuse(), None);
     stand(&mut game, FUSE_DELAY_TICKS - 1);
     assert_eq!(game.fuse(), None);
     stand(&mut game, 1);
