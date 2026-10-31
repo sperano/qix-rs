@@ -3,6 +3,8 @@
 
 use std::ops::{Add, Mul, Neg, Sub};
 
+use crate::geometry::Point;
+
 /// A point or a displacement in playfield units: one unit per cell, so
 /// cell `(x, y)` covers `[x, x + 1) x [y, y + 1)`; `y` grows downwards.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -43,11 +45,26 @@ impl Vec2 {
         (self + other) * 0.5
     }
 
+    /// The `z` component of the cross product: positive when `other`
+    /// turns from `self` towards `y`, negative the other way, zero when
+    /// the two are parallel.
+    pub fn cross(self, other: Self) -> f32 {
+        self.x * other.y - self.y * other.x
+    }
+
     /// This vector turned by `angle` radians, from the `x` axis towards
     /// `y`.
     pub fn rotated(self, angle: f32) -> Self {
         let (sin, cos) = angle.sin_cos();
         Self::new(self.x * cos - self.y * sin, self.x * sin + self.y * cos)
+    }
+}
+
+impl From<Point> for Vec2 {
+    /// The playfield position of a lattice point: the top-left corner of
+    /// cell `(x, y)` is at `(x, y)`.
+    fn from(point: Point) -> Self {
+        Self::new(f32::from(point.x), f32::from(point.y))
     }
 }
 

@@ -1,9 +1,13 @@
 //! The game state and its fixed-step update.
 
 use crate::board::{Board, DrawKind};
+use crate::collision::{qix_hits_marker, qix_hits_stix};
+use crate::event::{DeathCause, Event};
 use crate::geometry::Dir;
 use crate::input::InputState;
 use crate::marker::{Marker, MarkerState};
+use crate::qix::Qix;
+use crate::rng::Rng;
 use crate::stix::{Stix, legal_step};
 use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS, SLOW_STEP_TICKS};
 
@@ -18,18 +22,26 @@ pub struct Game {
     stix: Option<Stix>,
     /// Ticks a direction has been held since the marker's last step.
     marker_held_ticks: u32,
+    qix: Qix,
+    /// Every random choice of the game comes from here.
+    rng: Rng,
+    /// What the last tick raised.
+    events: Vec<Event>,
 }
 
 impl Game {
     /// A game that has not ticked yet: a free `BOARD_W x BOARD_H` board
-    /// with the marker at the centre of its bottom edge.
-    pub fn new() -> Self {
-        Self::with_board(Board::new(BOARD_W, BOARD_H))
+    /// with the marker at the centre of its bottom edge and a Qix spawned
+    /// at its centre, every random choice drawn from `rng`.
+    pub fn new(mut rng: Rng) -> Self {
+        let board = Board::new(BOARD_W, BOARD_H);
+        let qix = Qix::spawn(&board, &mut rng);
+        Self::with_board(board, qix, rng)
     }
 
-    /// A game on `board`, with the marker at the centre of its bottom
-    /// edge.
-    pub fn with_board(board: Board) -> Self {
+    /// A game on `board`, with the marker at the centre of its bottom edge
+    /// and `qix`, which must lie on free cells, drawing from `rng`.
+    pub fn with_board(board: Board, qix: Qix, rng: Rng) -> Self {
         let marker = Marker::start(&board);
         Self {
             ticks: 0,
@@ -37,13 +49,23 @@ impl Game {
             marker,
             stix: None,
             marker_held_ticks: 0,
+            qix,
+            rng,
+            events: Vec::new(),
         }
     }
 
-    /// Advances the game by one step of `1 / TICK_HZ` seconds.
+    /// Advances the game by one step of `1 / TICK_HZ` seconds: the marker
+    /// moves, then the Qix, then a Qix touching the stix or the drawing
+    /// marker raises [`Event::Death`].
     pub fn tick(&mut self, input: &InputState) {
         self.ticks += 1;
+        self.events.clear();
         self.move_marker(input);
+        self.qix.tick(&self.board, &mut self.rng);
+        if self.qix_hits_player() {
+            self.events.push(Event::Death(DeathCause::Qix));
+        }
     }
 
     /// The number of steps run so far.
@@ -64,6 +86,24 @@ impl Game {
     /// The stix being drawn, if the marker is drawing one.
     pub fn stix(&self) -> Option<&Stix> {
         self.stix.as_ref()
+    }
+
+    /// The Qix.
+    pub fn qix(&self) -> &Qix {
+        &self.qix
+    }
+
+    /// The events the last tick raised, in the order they happened.
+    pub fn events(&self) -> &[Event] {
+        &self.events
+    }
+
+    /// The Qix touches the stix or the marker drawing it; a marker on the
+    /// border has no stix and is never hit.
+    fn qix_hits_player(&self) -> bool {
+        self.stix.as_ref().is_some_and(|stix| {
+            qix_hits_stix(&self.qix, stix) || qix_hits_marker(&self.qix, self.marker.pos)
+        })
     }
 
     /// Steps the marker once every [`Game::step_ticks`] ticks the
@@ -133,11 +173,5 @@ impl Game {
     /// the board, until the Qix takes its place.
     fn claim_seed(&self) -> (u16, u16) {
         (self.board.width() / 2, self.board.height() / 2)
-    }
-}
-
-impl Default for Game {
-    fn default() -> Self {
-        Self::new()
     }
 }

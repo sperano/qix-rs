@@ -1,6 +1,6 @@
 use std::f32::consts::FRAC_PI_2;
 
-use crate::Vec2;
+use crate::{Point, Vec2};
 
 /// Rounding slack of the trigonometric results.
 const EPSILON: f32 = 1e-6;
@@ -47,4 +47,17 @@ fn a_quarter_turn_takes_x_onto_y() {
 fn from_angle_is_the_turned_unit_vector() {
     assert_near(Vec2::from_angle(FRAC_PI_2), Vec2::new(0.0, 1.0));
     assert_near(Vec2::from_angle(0.0), Vec2::new(1.0, 0.0));
+}
+
+#[test]
+fn cross_is_signed_by_the_turn() {
+    let (x, y) = (Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0));
+    assert_eq!(x.cross(y), 1.0);
+    assert_eq!(y.cross(x), -1.0);
+    assert_eq!(x.cross(x * 3.0), 0.0);
+}
+
+#[test]
+fn a_lattice_point_is_the_corner_of_its_cell() {
+    assert_eq!(Vec2::from(Point::new(3, 7)), Vec2::new(3.0, 7.0));
 }
