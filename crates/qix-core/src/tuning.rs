@@ -47,6 +47,11 @@ pub const MARKER_HIT_HALF_SIZE: f32 = 0.5;
 /// Ticks between two lattice steps of a Sparx along the border.
 pub const SPARX_STEP_TICKS: u32 = 3;
 
+/// Ticks between two lattice steps of a Super Sparx along the stix: as
+/// fast as the marker draws a fast stix, so it catches a marker that
+/// stands still or draws slow.
+pub const SUPER_SPARX_STEP_TICKS: u32 = MARKER_STEP_TICKS;
+
 /// Ticks the marker may stand still on the stix it draws before the fuse
 /// is lit at the stix's start: longer than a slow draw step, so drawing
 /// steadily never lights it.

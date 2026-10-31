@@ -17,6 +17,7 @@ use crate::stix::{Stix, legal_moves, legal_step};
 use crate::tuning::{
     BOARD_H, BOARD_W, EXTRA_SPARX, MARKER_STEP_TICKS, RESPAWN_GRACE_TICKS, SLOW_STEP_TICKS,
     SPARX_METER_TICKS, SPARX_STEP_TICKS, STARTING_LIVES, STARTING_MULTIPLIER,
+    SUPER_SPARX_STEP_TICKS,
 };
 
 /// The whole game, advanced one fixed step at a time.
@@ -34,8 +35,10 @@ pub struct Game {
     fuse: FuseTimer,
     qix: Qix,
     sparx: Vec<Sparx>,
-    /// Ticks since the Sparx last stepped.
+    /// Ticks since the Sparx on the border last stepped.
     sparx_ticks: u32,
+    /// Ticks since the Sparx chasing along the stix last stepped.
+    stix_sparx_ticks: u32,
     /// The kinds of the Sparx the level started with, the first of
     /// `sparx`: what a reset of the meter takes them back to.
     level_sparx: Vec<SparxKind>,
@@ -88,6 +91,7 @@ impl Game {
             level_sparx: sparx.iter().map(|sparx| sparx.kind).collect(),
             sparx,
             sparx_ticks: 0,
+            stix_sparx_ticks: 0,
             sparx_meter: SparxMeter::new(SPARX_METER_TICKS),
             rng,
             lives: STARTING_LIVES,
@@ -109,8 +113,9 @@ impl Game {
     /// complete, a tick does nothing.
     ///
     /// A death raises [`Event::Death`] and takes a life, and the last one
-    /// [`Event::GameOver`] too: the stix and its fuse are cleared and the
-    /// marker is back on the border where the stix began. For
+    /// [`Event::GameOver`] too: the stix and its fuse are cleared, the
+    /// marker is back on the border where the stix began and a Sparx left
+    /// off the border snaps back to it. For
     /// [`RESPAWN_GRACE_TICKS`] ticks after it, the Sparx cannot kill and
     /// the marker cannot draw. A death also resets the Sparx meter.
     ///
@@ -238,8 +243,8 @@ impl Game {
 
     /// Raises [`Event::Death`] for `cause` and takes a life: the stix and
     /// its fuse are cleared, the marker is back on the border where the
-    /// stix began (or stays where it is on the border) and the grace
-    /// period starts. Taking the last life raises [`Event::GameOver`]
+    /// stix began (or stays where it is on the border), a Sparx that was on
+    /// the stix snaps to the border and the grace period starts. Taking the last life raises [`Event::GameOver`]
     /// instead of starting a grace period.
     fn die(&mut self, cause: DeathCause) {
         self.events.push(Event::Death(cause));
@@ -251,6 +256,7 @@ impl Game {
         self.marker_held_ticks = 0;
         self.fuse.put_out();
         self.reset_sparx_meter();
+        self.snap_sparx_to_border();
         if self.is_over() {
             self.events.push(Event::GameOver);
         } else {
@@ -313,24 +319,32 @@ impl Game {
         self.fuse.reached(head)
     }
 
-    /// Steps every Sparx once every [`SPARX_STEP_TICKS`] ticks. Returns
-    /// whether one of them touched the marker, which moved from
+    /// Steps every Sparx on the border once every [`SPARX_STEP_TICKS`]
+    /// ticks and every one chasing along the stix (see
+    /// [`Sparx::chases_along`]) once every [`SUPER_SPARX_STEP_TICKS`].
+    /// Returns whether one of them touched the marker, which moved from
     /// `marker_from` this tick: see [`Sparx::hits_marker`].
     fn move_sparx(&mut self, marker_from: Point) -> bool {
-        self.sparx_ticks += 1;
-        let due = self.sparx_ticks >= SPARX_STEP_TICKS;
-        if due {
-            self.sparx_ticks = 0;
-        }
+        let border_due = count_to(&mut self.sparx_ticks, SPARX_STEP_TICKS);
+        let stix_due = count_to(&mut self.stix_sparx_ticks, SUPER_SPARX_STEP_TICKS);
         let mut hit = false;
         for sparx in &mut self.sparx {
             let from = sparx.pos;
-            if due {
-                sparx.step(&self.board, &mut self.rng);
+            match self.stix.as_ref().filter(|stix| sparx.chases_along(stix)) {
+                Some(stix) if stix_due => sparx.step_along_stix(stix),
+                None if border_due => sparx.step(&self.board, &mut self.rng),
+                _ => {}
             }
             hit |= sparx.hits_marker(from, marker_from, self.marker.pos);
         }
         hit
+    }
+
+    /// Moves every Sparx off the border to the border point nearest it.
+    fn snap_sparx_to_border(&mut self) {
+        for sparx in &mut self.sparx {
+            sparx.snap_to_border(&self.board);
+        }
     }
 
     /// Steps the marker once every [`Game::step_ticks`] ticks the
@@ -377,7 +391,8 @@ impl Game {
     /// A step onto a border point closes the stix: the area it cuts off
     /// from the Qix is claimed and scored, the stix is dropped and its fuse
     /// put out, the marker is back on the border, at the closing point, and
-    /// a Sparx the claim took off the border snaps back to it. A claim
+    /// a Sparx the claim left off the border (one that was on the stix, or
+    /// one the claim cut off) snaps back to it. A claim
     /// taking the board to the threshold completes the level.
     fn draw(&mut self, dir: Dir, kind: DrawKind) {
         let mut stix = self
@@ -400,9 +415,7 @@ impl Game {
             }
             self.marker.state = MarkerState::OnBorder;
             self.fuse.put_out();
-            for sparx in &mut self.sparx {
-                sparx.snap_to_border(&self.board);
-            }
+            self.snap_sparx_to_border();
         } else {
             self.marker.state = MarkerState::Drawing;
             self.stix = Some(stix);
@@ -420,4 +433,15 @@ impl Game {
         self.score.add(self.threshold.bonus(fraction));
         self.events.push(Event::LevelComplete { fraction });
     }
+}
+
+/// Counts one more tick on `ticks` and returns whether it reached
+/// `period`, which starts the count again.
+fn count_to(ticks: &mut u32, period: u32) -> bool {
+    *ticks += 1;
+    let due = *ticks >= period;
+    if due {
+        *ticks = 0;
+    }
+    due
 }

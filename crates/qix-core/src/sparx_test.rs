@@ -263,3 +263,63 @@ fn spawn_at_top_alternates_left_and_right_from_the_pair_point() {
     let dirs: Vec<_> = spawned.iter().map(|sparx| sparx.dir).collect();
     assert_eq!(dirs, [Dir::Left, Dir::Right, Dir::Left]);
 }
+
+/// A fast stix up from the bottom edge at `x`, `steps` long.
+fn stix_up(x: u16, steps: u16) -> Stix {
+    let mut stix = Stix::new(Point::new(x, H));
+    for y in (H - steps..H).rev() {
+        stix.push(Point::new(x, y), DrawKind::Fast);
+    }
+    stix
+}
+
+#[test]
+fn only_a_super_sparx_chases_along_the_stix() {
+    let stix = stix_up(W / 2, 2);
+    let normal = sparx(stix.start(), Dir::Left);
+    let chaser = Sparx {
+        kind: SparxKind::Super,
+        ..normal
+    };
+
+    assert!(!normal.chases_along(&stix));
+    assert!(chaser.chases_along(&stix));
+}
+
+#[test]
+fn a_super_sparx_off_the_stix_does_not_chase_along_it() {
+    let stix = stix_up(W / 2, 2);
+    let chaser = Sparx {
+        kind: SparxKind::Super,
+        ..sparx(Point::new(W / 2 + 1, H), Dir::Left)
+    };
+
+    assert!(!chaser.chases_along(&stix));
+}
+
+#[test]
+fn a_sparx_steps_along_the_stix_to_its_head_and_stays_there() {
+    let stix = stix_up(W / 2, 2);
+    let mut chaser = sparx(stix.start(), Dir::Left);
+
+    let points: Vec<_> = (0..3)
+        .map(|_| {
+            chaser.step_along_stix(&stix);
+            chaser.pos
+        })
+        .collect();
+
+    assert_eq!(points, [Point::new(W / 2, H - 1), stix.head(), stix.head()]);
+    assert_eq!(chaser.dir, Dir::Up);
+}
+
+#[test]
+fn a_sparx_off_the_stix_does_not_step_along_it() {
+    let stix = stix_up(W / 2, 2);
+    let beside = sparx(Point::new(W / 2 + 1, H - 1), Dir::Left);
+    let mut stepped = beside;
+
+    stepped.step_along_stix(&stix);
+
+    assert_eq!(stepped, beside);
+}

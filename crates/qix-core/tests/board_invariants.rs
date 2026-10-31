@@ -2,11 +2,13 @@
 //! [`Game::tick`]: plain loops over the game's seeded generator, until the
 //! simulation harness brings `proptest`.
 
+use std::cell::Cell;
+
 use qix_core::stix::legal_moves;
 use qix_core::tuning::{CLAIM_THRESHOLD_RANGE, SLOW_STEP_TICKS};
 use qix_core::{
-    Board, ClaimThreshold, Dir, DrawKind, Event, Game, InputState, MarkerState, Qix, Sparx, Stix,
-    Vec2,
+    Board, ClaimThreshold, Dir, DrawKind, Event, Game, InputState, MarkerState, Qix, Sparx,
+    SparxKind, Stix, Vec2,
 };
 
 /// Dimensions of the board the runs play on: small, so that random stix
@@ -181,15 +183,20 @@ fn play(game: &mut Game, step: Move, check: &impl Fn(&Before, &Game)) -> bool {
 }
 
 /// A game on a fresh `W x H` board, with a Qix one unit long at its
-/// centre, the two Sparx of a level start and the highest claim
-/// threshold, so the runs claim as much as they can before the level is
-/// complete.
+/// centre, the two Sparx of a level start, the second of them Super so
+/// that it chases along the stix, and the highest claim threshold, so the
+/// runs claim as much as they can before the level is complete.
 fn new_game() -> Game {
     let board = Board::new(W, H);
     let centre = Vec2::new(f32::from(W), f32::from(H)) * 0.5;
     let half = Vec2::new(0.5, 0.0);
     let qix = Qix::new(centre - half, centre + half, Vec2::default(), 0.0);
-    let sparx = Sparx::spawn_pair(&board).to_vec();
+    let [normal, chaser] = Sparx::spawn_pair(&board);
+    let chaser = Sparx {
+        kind: SparxKind::Super,
+        ..chaser
+    };
+    let sparx = vec![normal, chaser];
     let mut game = Game::with_board(board, qix, sparx, qix_core::Rng::new(QIX_SEED));
     game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.end()));
     game
@@ -256,12 +263,20 @@ fn marker_is_on_the_border_when_not_drawing() {
 }
 
 #[test]
-fn every_sparx_is_on_the_border() {
+fn every_sparx_is_on_the_border_or_chasing_along_the_stix() {
+    let off_the_border = Cell::new(0_u32);
     for_every_tick(|_, game| {
         for sparx in game.sparx() {
-            assert!(game.board().is_border(sparx.pos), "{sparx:?}");
+            let on_border = game.board().is_border(sparx.pos);
+            let chasing = game.stix().is_some_and(|stix| sparx.chases_along(stix));
+            assert!(on_border || chasing, "{sparx:?}");
+            off_the_border.set(off_the_border.get() + u32::from(!on_border));
         }
     });
+    assert!(
+        off_the_border.get() > 0,
+        "no Sparx ever chased along a stix"
+    );
 }
 
 #[test]

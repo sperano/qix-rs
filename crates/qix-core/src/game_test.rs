@@ -8,6 +8,7 @@ mod levels;
 mod qix_hits;
 mod sparx_hits;
 mod sparx_meter;
+mod super_sparx;
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1194;
