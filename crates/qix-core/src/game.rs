@@ -6,6 +6,7 @@ use crate::event::{DeathCause, Event};
 use crate::fuse::{Fuse, FuseTimer};
 use crate::geometry::{Dir, Point};
 use crate::input::InputState;
+use crate::level::ClaimThreshold;
 use crate::marker::{Marker, MarkerState};
 use crate::qix::Qix;
 use crate::rng::Rng;
@@ -45,6 +46,10 @@ pub struct Game {
     score: Score,
     /// The multiplier of the points every claim scores.
     multiplier: u32,
+    /// The claimed fraction that completes the level.
+    threshold: ClaimThreshold,
+    /// A claim reached the threshold: the game no longer ticks.
+    level_complete: bool,
     /// What the last tick raised.
     events: Vec<Event>,
 }
@@ -81,6 +86,8 @@ impl Game {
             grace_ticks: 0,
             score: Score::default(),
             multiplier: STARTING_MULTIPLIER,
+            threshold: ClaimThreshold::default(),
+            level_complete: false,
             events: Vec::new(),
         }
     }
@@ -89,16 +96,20 @@ impl Game {
     /// moves, then the fuse burns, then the Qix moves, then the Sparx; a
     /// Qix touching the stix or the drawing marker kills the player, else
     /// a Sparx touching the marker does, else the fuse at the marker; one
-    /// death at most per tick. Once the game is over, a tick does nothing.
+    /// death at most per tick. Once the game is over or the level
+    /// complete, a tick does nothing.
     ///
     /// A death raises [`Event::Death`] and takes a life, and the last one
     /// [`Event::GameOver`] too: the stix and its fuse are cleared and the
     /// marker is back on the border where the stix began. For
     /// [`RESPAWN_GRACE_TICKS`] ticks after it, the Sparx cannot kill and
     /// the marker cannot draw.
+    ///
+    /// A claim that completes the level ends the tick: nothing moves
+    /// after it.
     pub fn tick(&mut self, input: &InputState) {
         self.events.clear();
-        if self.is_over() {
+        if self.is_over() || self.level_complete {
             return;
         }
         self.ticks += 1;
@@ -106,6 +117,9 @@ impl Game {
         self.grace_ticks = self.grace_ticks.saturating_sub(1);
         let marker_from = self.marker.pos;
         self.move_marker(input, grace);
+        if self.level_complete {
+            return;
+        }
         let fuse_hit = self.burn_fuse(marker_from);
         self.qix.tick(&self.board, &mut self.rng);
         let sparx_hit = self.move_sparx(marker_from) && !grace;
@@ -170,6 +184,22 @@ impl Game {
     /// The points scored so far.
     pub fn score(&self) -> Score {
         self.score
+    }
+
+    /// The claimed fraction of the board that completes the level.
+    pub fn claim_threshold(&self) -> ClaimThreshold {
+        self.threshold
+    }
+
+    /// Sets the claimed fraction of the board that completes the level,
+    /// checked from the next claim on.
+    pub fn set_claim_threshold(&mut self, threshold: ClaimThreshold) {
+        self.threshold = threshold;
+    }
+
+    /// A claim reached the claim threshold: the game no longer ticks.
+    pub fn is_level_complete(&self) -> bool {
+        self.level_complete
     }
 
     /// The last life is lost: the game no longer ticks.
@@ -296,7 +326,8 @@ impl Game {
     /// A step onto a border point closes the stix: the area it cuts off
     /// from the Qix is claimed and scored, the stix is dropped, the marker
     /// is back on the border, at the closing point, and a Sparx the claim
-    /// took off the border snaps back to it.
+    /// took off the border snaps back to it. A claim taking the board to
+    /// the threshold completes the level.
     fn draw(&mut self, dir: Dir, kind: DrawKind) {
         let mut stix = self
             .stix
@@ -314,6 +345,7 @@ impl Game {
                 .close_stix(&stix, std::slice::from_ref(&self.qix));
             if let Some(claim) = close.claim {
                 self.score.add(score_for_claim(&claim, self.multiplier));
+                self.check_level_complete(claim.fraction);
             }
             self.marker.state = MarkerState::OnBorder;
             for sparx in &mut self.sparx {
@@ -323,5 +355,17 @@ impl Game {
             self.marker.state = MarkerState::Drawing;
             self.stix = Some(stix);
         }
+    }
+
+    /// Completes the level when `fraction`, the board's claimed fraction
+    /// after a claim, reaches the threshold: raises
+    /// [`Event::LevelComplete`] and scores the level bonus.
+    fn check_level_complete(&mut self, fraction: f32) {
+        if !self.threshold.is_reached(fraction) {
+            return;
+        }
+        self.level_complete = true;
+        self.score.add(self.threshold.bonus(fraction));
+        self.events.push(Event::LevelComplete { fraction });
     }
 }

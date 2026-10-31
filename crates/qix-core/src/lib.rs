@@ -14,6 +14,7 @@ pub mod fuse;
 pub mod game;
 pub mod geometry;
 pub mod input;
+pub mod level;
 pub mod marker;
 pub mod qix;
 pub mod rng;
@@ -43,6 +44,8 @@ mod geometry_test;
 #[cfg(test)]
 mod input_test;
 #[cfg(test)]
+mod level_test;
+#[cfg(test)]
 mod marker_test;
 #[cfg(test)]
 mod qix_test;
@@ -67,6 +70,7 @@ pub use fuse::Fuse;
 pub use game::Game;
 pub use geometry::{Dir, Point, segments_intersect};
 pub use input::InputState;
+pub use level::ClaimThreshold;
 pub use marker::{Marker, MarkerState};
 pub use qix::Qix;
 pub use rng::Rng;
