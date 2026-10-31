@@ -64,6 +64,14 @@ pub const FUSE_STEP_TICKS: u32 = 12;
 /// Lives at the start of a game (the arcade's default).
 pub const STARTING_LIVES: u32 = 3;
 
+/// Points between two extra lives: one each time the score crosses a
+/// multiple of it (a dip switch on the arcade).
+pub const EXTRA_LIFE_EVERY: u32 = 30_000;
+
+/// The most lives the player can have, the one being played included: an
+/// extra life past it is lost.
+pub const MAX_LIVES: u32 = 9;
+
 /// Ticks after a death during which the Sparx cannot kill the marker and
 /// the marker cannot draw: two seconds.
 pub const RESPAWN_GRACE_TICKS: u32 = 2 * TICK_HZ;

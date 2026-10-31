@@ -2,6 +2,7 @@
 
 mod level_end;
 mod level_start;
+mod scoring;
 
 use crate::board::{Board, DrawKind};
 use crate::collision::qix_hits_player;
@@ -204,7 +205,8 @@ impl Game {
         self.sparx_meter = meter;
     }
 
-    /// The lives left, the one being played included.
+    /// The lives left, the one being played included: see
+    /// [`Game::score`] for the extra ones.
     pub fn lives(&self) -> u32 {
         self.lives
     }
@@ -215,7 +217,10 @@ impl Game {
         self.grace_ticks
     }
 
-    /// The points scored so far.
+    /// The points scored so far. Each time they cross a multiple of
+    /// [`EXTRA_LIFE_EVERY`](crate::tuning::EXTRA_LIFE_EVERY) the player
+    /// earns a life, up to [`MAX_LIVES`](crate::tuning::MAX_LIVES), and
+    /// the tick raises [`Event::ExtraLife`].
     pub fn score(&self) -> Score {
         self.score
     }
@@ -415,7 +420,7 @@ impl Game {
         if self.board.is_border(next) {
             let close = self.board.close_stix(&stix, &self.qix);
             if let Some(claim) = &close.claim {
-                self.score.add(score_for_claim(claim, self.multiplier));
+                self.add_score(score_for_claim(claim, self.multiplier));
             }
             self.end_level_after(&close);
             self.marker.state = MarkerState::OnBorder;
