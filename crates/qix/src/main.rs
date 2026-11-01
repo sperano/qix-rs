@@ -1,6 +1,7 @@
 //! Desktop front end of the Qix clone: an eframe window around `qix_core`.
 
 mod app;
+mod audio;
 mod bindings;
 mod claim_fill;
 mod input;
@@ -11,6 +12,12 @@ mod playfield;
 mod render;
 mod settings;
 mod settings_menu;
+mod sound;
+#[cfg_attr(
+    not(feature = "audio"),
+    allow(dead_code, reason = "only the audio feature plays the waveforms")
+)]
+mod synth;
 mod timestep;
 
 #[cfg(test)]
@@ -31,6 +38,10 @@ mod playfield_test;
 mod settings_menu_test;
 #[cfg(test)]
 mod settings_test;
+#[cfg(test)]
+mod sound_test;
+#[cfg(test)]
+mod synth_test;
 #[cfg(test)]
 mod timestep_test;
 

@@ -223,7 +223,9 @@ fn a_sparx_on_the_stix_snaps_to_the_border_on_a_qix_death() {
     let before_death = (1..=past_column * MARKER_STEP_TICKS).find_map(|_| {
         let before = game.sparx()[0];
         game.tick(&drawing(Dir::Right, DrawKind::Fast));
-        (!game.events().is_empty()).then_some(before)
+        game.events()
+            .contains(&Event::Death(DeathCause::Qix))
+            .then_some(before)
     });
 
     let before = before_death.expect("the Qix never killed");

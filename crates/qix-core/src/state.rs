@@ -47,6 +47,8 @@ pub struct Session {
     game: Game,
     high_scores: HighScores,
     high_score: u32,
+    /// The last tick of the session ticked the game.
+    played: bool,
 }
 
 impl Session {
@@ -64,6 +66,7 @@ impl Session {
             game,
             high_score: high_scores.best(),
             high_scores,
+            played: false,
         }
     }
 
@@ -89,6 +92,14 @@ impl Session {
         &self.high_scores
     }
 
+    /// The events the game raised during the last tick of the session,
+    /// in the order they happened; none when that tick did not tick the
+    /// game, even though [`Game::events`] still holds those of its last
+    /// tick.
+    pub fn events(&self) -> &[Event] {
+        if self.played { self.game.events() } else { &[] }
+    }
+
     /// Sets the rules of the games to come (see [`Game::set_rules`]): on
     /// the title screen, the game it shows restarts with them; any other
     /// game keeps playing by its own.
@@ -112,6 +123,7 @@ impl Session {
     /// [`GameState::Paused`]. Every tick raises the high score to the
     /// game's score if that is higher.
     pub fn tick(&mut self, input: &InputState) {
+        self.played = false;
         self.state = match self.state {
             GameState::Title if input.confirm => GameState::Playing,
             GameState::Playing if input.pause => GameState::Paused,
@@ -155,6 +167,7 @@ impl Session {
     /// to.
     fn play(&mut self, input: &InputState) -> GameState {
         self.game.tick(input);
+        self.played = true;
         self.game
             .events()
             .iter()
@@ -169,7 +182,7 @@ impl Session {
                     bonus,
                     split,
                 }),
-                Event::Death(_) | Event::ExtraLife => None,
+                Event::Draw(_) | Event::Claim { .. } | Event::Death(_) | Event::ExtraLife => None,
             })
             .unwrap_or(GameState::Playing)
     }

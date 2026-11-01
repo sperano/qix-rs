@@ -91,11 +91,14 @@ fn a_stix_splitting_the_qix_ends_the_level() {
     assert_eq!(game.board(), &board, "the stix claimed cells");
     assert_eq!(
         game.events(),
-        [Event::LevelComplete {
-            fraction: game.board().claimed_fraction(),
-            bonus: 0,
-            split: true,
-        }]
+        [
+            Event::Draw(DrawKind::Fast),
+            Event::LevelComplete {
+                fraction: game.board().claimed_fraction(),
+                bonus: 0,
+                split: true,
+            },
+        ]
     );
     assert_eq!(game.score().points(), 0, "nothing claimed, no bonus");
 }
@@ -155,11 +158,18 @@ fn a_split_claim_scores_at_the_old_multiplier_without_a_bonus() {
     assert_eq!(game.board().claimed_fraction(), POCKET_FRACTION);
     assert_eq!(
         game.events(),
-        [Event::LevelComplete {
-            fraction: POCKET_FRACTION,
-            bonus: 0,
-            split: true,
-        }]
+        [
+            Event::Draw(DrawKind::Fast),
+            Event::Claim {
+                cells: POCKET_STIX_CELLS as usize,
+                kind: DrawKind::Fast,
+            },
+            Event::LevelComplete {
+                fraction: POCKET_FRACTION,
+                bonus: 0,
+                split: true,
+            },
+        ]
     );
     let claim_points = POCKET_STIX_CELLS * POINTS_PER_CELL * STARTING_MULTIPLIER;
     assert_eq!(game.score().points(), claim_points, "a bonus on a split");
