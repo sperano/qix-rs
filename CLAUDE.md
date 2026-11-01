@@ -4,8 +4,9 @@
 
 - `crates/qix-core` (`qix_core`) contains all game rules and state. It must
   remain independent of egui and other user-interface code.
-- `crates/qix` (`qix`) is the eframe desktop application. It translates input,
-  advances the core, and renders game state.
+- `crates/qix` (`qix`) is the eframe application, for the desktop (`native.rs`)
+  and the browser (`web.rs`, built with Trunk). It translates input, advances
+  the core, and renders game state.
 - Put gameplay tuning values in named constants under `qix_core::tuning`; do
   not scatter magic numbers through the implementation.
 

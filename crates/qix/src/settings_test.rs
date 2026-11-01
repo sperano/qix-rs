@@ -6,10 +6,10 @@ use qix_core::tuning::{
 use qix_core::{ClaimThreshold, Rules, StartingLives};
 
 use crate::bindings::{Control, KeyBindings};
+use crate::native::{DEFAULT_WINDOW_SIZE, MIN_WINDOW_SIZE};
 use crate::persist::{SETTINGS_KEY, load_settings, save_settings};
 use crate::persist_test::MemoryStorage;
 use crate::settings::{BASE_WINDOW_SIZE, SCALE_DEFAULT, SCALE_RANGE, Scale, Settings};
-use crate::{DEFAULT_WINDOW_SIZE, MIN_WINDOW_SIZE};
 
 /// The stored value of the default settings.
 const DEFAULTS: &str = "(threshold:0.75,starting_lives:3,keys:(up:ArrowUp,down:ArrowDown,\

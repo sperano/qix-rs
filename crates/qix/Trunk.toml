@@ -1,0 +1,9 @@
+# Web build: `trunk build --release` from this directory writes the page,
+# the JavaScript glue and the WebAssembly module to `dist/`.
+
+[build]
+target = "index.html"
+dist = "dist"
+# Relative asset paths, so that `dist/` works from any directory it is
+# served from.
+public_url = "./"

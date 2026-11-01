@@ -45,5 +45,27 @@ cargo run -p qix --features audio
 
 Without an audio device the game prints a warning and plays silently.
 
+## Web build
+
+The game also runs in a browser, without sound. Install
+[Trunk](https://trunkrs.dev) and the WebAssembly target, then serve it from
+`crates/qix`:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cd crates/qix
+trunk serve --release
+```
+
+`trunk build --release` writes the page to `crates/qix/dist/`, which any
+static file server can serve.
+
+## Releases
+
+Pushing a `v*` tag runs the release workflow: it creates the GitHub release
+and attaches the Linux (x86_64), macOS (Apple silicon and Intel) and Windows
+(x86_64) binaries, built with sound, and the web build as a zip. The Linux
+binary needs ALSA (`libasound2`) at run time.
+
 Repository development and test conventions are documented in
 [`CLAUDE.md`](CLAUDE.md).

@@ -5,10 +5,10 @@ use qix_core::{
     SparxMeter, Vec2,
 };
 
+use crate::native::{DEFAULT_WINDOW_SIZE, MIN_WINDOW_SIZE};
 use crate::palette;
 use crate::playfield::{WINDOW_MARGIN, letterbox};
 use crate::render::hud::{self, Hud, MAX_LIFE_MARKERS, Meter, column_rects, hud};
-use crate::{DEFAULT_WINDOW_SIZE, MIN_WINDOW_SIZE};
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1207;

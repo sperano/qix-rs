@@ -1,0 +1,152 @@
+name: Release
+
+# Pushing a `v*` tag creates its GitHub release and attaches the desktop
+# binaries (Linux, macOS, Windows) and the web build to it.
+#
+# Only the release and publish jobs, which run no cargo step, get the write
+# token. The build jobs run the build scripts and proc macros of every
+# dependency, so they get a read-only token and hand their archives to the
+# publish job as artifacts.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # A re-run keeps the release created by the first run.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 ||
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" --generate-notes --verify-tag
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    env:
+      TARGET: ${{ matrix.target }}
+    # Windows runners default to pwsh, which does not expand `$TARGET`.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install eframe and audio build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libgtk-3-dev libwayland-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libasound2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Players get the sound effects; without an audio device the game
+      # plays silently.
+      - name: Build
+        run: cargo build --release --locked -p qix --features audio --target "$TARGET"
+
+      - name: Package
+        run: |
+          name="qix-$TAG-$TARGET"
+          mkdir "$name"
+          cp README.md LICENSE "$name/"
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp "target/$TARGET/release/qix.exe" "$name/"
+            archive="$name.zip"
+            7z a "$archive" "$name"
+          else
+            cp "target/$TARGET/release/qix" "$name/"
+            archive="$name.tar.gz"
+            tar -czf "$archive" "$name"
+          fi
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: qix-${{ matrix.target }}
+          path: ${{ env.ARCHIVE }}
+          if-no-files-found: error
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@0.22.1
+
+      # Trunk fetches the wasm-bindgen matching Cargo.lock and wasm-opt.
+      - name: Build
+        working-directory: crates/qix
+        run: trunk build --release --locked
+
+      - name: Package
+        run: |
+          name="qix-$TAG-web"
+          mv crates/qix/dist "$name"
+          rm -f "$name/.trunk-lock"
+          zip -r "$name.zip" "$name"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: qix-web
+          path: qix-${{ github.ref_name }}-web.zip
+          if-no-files-found: error
+
+  # Runs after every build, failed ones included, so a failed target does
+  # not hold back the archives of the others.
+  publish:
+    needs: [release, desktop, web]
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: qix-*
+          path: archives
+          merge-multiple: true
+
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" archives/* --repo "$GITHUB_REPOSITORY" --clobber
