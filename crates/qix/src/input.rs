@@ -1,34 +1,58 @@
 //! Keyboard sampling into the core's [`InputState`].
 
 use eframe::egui::{self, Key};
-use qix_core::{Dir, InputState};
+use qix_core::InputState;
 
-/// Movement keys in priority order: when several are held, the first wins.
-pub const DIR_KEYS: [(Key, Dir); 4] = [
-    (Key::ArrowUp, Dir::Up),
-    (Key::ArrowDown, Dir::Down),
-    (Key::ArrowLeft, Dir::Left),
-    (Key::ArrowRight, Dir::Right),
-];
-pub const FAST_KEY: Key = Key::Z;
-pub const SLOW_KEY: Key = Key::X;
+use crate::bindings::{Control, KeyBindings};
+
 pub const CONFIRM_KEY: Key = Key::Enter;
 pub const PAUSE_KEY: Key = Key::Escape;
 pub const OVERLAY_KEY: Key = Key::F1;
+/// Opens the settings from the title screen.
+pub const OPEN_SETTINGS_KEY: Key = Key::F2;
 
-/// Reads one frame's controls: held keys for movement and drawing, fresh
-/// presses (not key repeats) for confirm and pause.
-pub fn sample(input: &egui::InputState) -> InputState {
+/// The keys of fixed meaning, which no control may be bound to: they
+/// work whatever the bindings, the settings screen included.
+pub const RESERVED_KEYS: [Key; 4] = [CONFIRM_KEY, PAUSE_KEY, OVERLAY_KEY, OPEN_SETTINGS_KEY];
+
+/// Reads one frame's controls: held keys for movement and drawing, as
+/// `keys` binds them, fresh presses (not key repeats) for confirm and
+/// pause.
+pub fn sample(input: &egui::InputState, keys: &KeyBindings) -> InputState {
+    let held = |control| input.key_down(keys.key(control));
     InputState {
-        dir: DIR_KEYS
+        dir: Control::DIRS
             .iter()
-            .find(|(key, _)| input.key_down(*key))
+            .find(|&&(control, _)| held(control))
             .map(|&(_, dir)| dir),
-        fast: input.key_down(FAST_KEY),
-        slow: input.key_down(SLOW_KEY),
+        fast: held(Control::Fast),
+        slow: held(Control::Slow),
         confirm: first_press(input, CONFIRM_KEY),
         pause: first_press(input, PAUSE_KEY),
     }
+}
+
+/// Whether the settings key was pressed this frame, ignoring key
+/// repeats.
+pub fn settings_opened(input: &egui::InputState) -> bool {
+    first_press(input, OPEN_SETTINGS_KEY)
+}
+
+/// The keys that went down this frame, in order, ignoring key repeats.
+pub fn pressed_keys(input: &egui::InputState) -> Vec<Key> {
+    input
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            egui::Event::Key {
+                key,
+                pressed: true,
+                repeat: false,
+                ..
+            } => Some(*key),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Whether the debug overlay key was pressed this frame, ignoring key
@@ -40,12 +64,7 @@ pub fn overlay_toggled(input: &egui::InputState) -> bool {
 
 /// Whether `wanted` went down this frame, ignoring key repeats.
 fn first_press(input: &egui::InputState, wanted: Key) -> bool {
-    input.events.iter().any(|event| {
-        matches!(
-            event,
-            egui::Event::Key { key, pressed: true, repeat: false, .. } if *key == wanted
-        )
-    })
+    pressed_keys(input).contains(&wanted)
 }
 
 /// Turns per-frame samples into per-tick input: a press made in a frame

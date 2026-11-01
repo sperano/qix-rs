@@ -2,6 +2,7 @@
 
 use crate::board::DrawKind;
 use crate::geometry::Dir;
+use crate::tuning::{REPEAT_DELAY_TICKS, REPEAT_TICKS};
 
 /// The controls one [`crate::Game::tick`] sees.
 ///
@@ -34,5 +35,38 @@ impl InputState {
         } else {
             None
         }
+    }
+}
+
+/// A held direction read as repeated presses, as the initials entry and
+/// the menus read it: it acts on the tick it is first held, then again
+/// after [`REPEAT_DELAY_TICKS`] and every [`REPEAT_TICKS`] after that
+/// while it stays held.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DirRepeat {
+    held: Option<Dir>,
+    held_ticks: u32,
+}
+
+impl DirRepeat {
+    /// No direction held.
+    pub const fn new() -> Self {
+        Self {
+            held: None,
+            held_ticks: 0,
+        }
+    }
+
+    /// The direction to act on this tick with `dir` held, if any.
+    pub fn tick(&mut self, dir: Option<Dir>) -> Option<Dir> {
+        if dir != self.held {
+            self.held = dir;
+            self.held_ticks = 0;
+            return dir;
+        }
+        let dir = dir?;
+        self.held_ticks = self.held_ticks.saturating_add(1);
+        let repeated = self.held_ticks.checked_sub(REPEAT_DELAY_TICKS)?;
+        (repeated % REPEAT_TICKS == 0).then_some(dir)
     }
 }

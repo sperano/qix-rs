@@ -3,7 +3,8 @@
 
 use qix_core::{Dir, Game, HighScores, InitialsEntry};
 
-use crate::input::{CONFIRM_KEY, DIR_KEYS};
+use crate::bindings::{Control, KeyBindings};
+use crate::input::CONFIRM_KEY;
 use crate::numbers::thousands;
 use crate::render::screen::Screen;
 
@@ -44,8 +45,15 @@ pub fn initials_row(entry: &InitialsEntry) -> String {
 }
 
 /// The screen entering the initials of `game`'s score, which makes
-/// `high_scores`: the initials so far, the rank and the controls.
-pub fn high_score_entry(game: &Game, high_scores: &HighScores, entry: &InitialsEntry) -> Screen {
+/// `high_scores`: the initials so far, the rank and the controls, in
+/// `keys`.
+pub fn high_score_entry(
+    game: &Game,
+    high_scores: &HighScores,
+    entry: &InitialsEntry,
+    keys: &KeyBindings,
+) -> Screen {
+    let key_name = |dir| keys.key(Control::of_dir(dir)).name();
     let points = game.score().points();
     let mut lines = vec![format!("Score {}", thousands(points))];
     if let Some(rank) = high_scores.rank(points) {
@@ -66,12 +74,4 @@ pub fn high_score_entry(game: &Game, high_scores: &HighScores, entry: &InitialsE
         table: vec![initials_row(entry)],
         lines,
     }
-}
-
-/// The name of the key that moves in `dir`.
-fn key_name(dir: Dir) -> &'static str {
-    DIR_KEYS
-        .iter()
-        .find(|&&(_, key_dir)| key_dir == dir)
-        .map_or("?", |(key, _)| key.name())
 }

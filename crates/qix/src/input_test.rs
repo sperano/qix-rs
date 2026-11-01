@@ -1,7 +1,11 @@
 use eframe::egui::{self, Event, Key, Modifiers};
 use qix_core::{Dir, InputState};
 
-use crate::input::{InputLatch, overlay_toggled, sample};
+use crate::bindings::{Control, KeyBindings};
+use crate::input::{InputLatch, overlay_toggled, pressed_keys, sample, settings_opened};
+
+/// A key no default binding uses.
+const FREE_KEY: Key = Key::W;
 
 fn holding(keys: &[Key]) -> egui::InputState {
     let mut input = egui::InputState::default();
@@ -25,6 +29,11 @@ fn with_events(events: Vec<Event>) -> egui::InputState {
     input
 }
 
+/// `input` sampled with the default bindings.
+fn sampled(input: &egui::InputState) -> InputState {
+    sample(input, &KeyBindings::default())
+}
+
 fn pressing_confirm() -> InputState {
     InputState {
         confirm: true,
@@ -34,12 +43,12 @@ fn pressing_confirm() -> InputState {
 
 #[test]
 fn no_key_is_no_input() {
-    assert_eq!(sample(&holding(&[])), InputState::default());
+    assert_eq!(sampled(&holding(&[])), InputState::default());
 }
 
 #[test]
 fn held_keys_set_direction_and_draw_speed() {
-    let input = sample(&holding(&[Key::ArrowLeft, Key::Z, Key::X]));
+    let input = sampled(&holding(&[Key::ArrowLeft, Key::Z, Key::X]));
     assert_eq!(
         input,
         InputState {
@@ -60,19 +69,19 @@ fn each_arrow_maps_to_its_direction() {
         (Key::ArrowRight, Dir::Right),
     ];
     for (key, dir) in arrows {
-        assert_eq!(sample(&holding(&[key])).dir, Some(dir), "{key:?}");
+        assert_eq!(sampled(&holding(&[key])).dir, Some(dir), "{key:?}");
     }
 }
 
 #[test]
 fn the_first_direction_in_priority_order_wins() {
-    let input = sample(&holding(&[Key::ArrowRight, Key::ArrowDown]));
+    let input = sampled(&holding(&[Key::ArrowRight, Key::ArrowDown]));
     assert_eq!(input.dir, Some(Dir::Down));
 }
 
 #[test]
 fn fresh_presses_set_confirm_and_pause() {
-    let input = sample(&with_events(vec![
+    let input = sampled(&with_events(vec![
         key_event(Key::Enter, true, false),
         key_event(Key::Escape, true, false),
     ]));
@@ -82,7 +91,7 @@ fn fresh_presses_set_confirm_and_pause() {
 
 #[test]
 fn key_repeats_and_releases_are_not_presses() {
-    let input = sample(&with_events(vec![
+    let input = sampled(&with_events(vec![
         key_event(Key::Enter, true, true),
         key_event(Key::Escape, false, false),
     ]));
@@ -144,5 +153,51 @@ fn a_held_or_released_f1_does_not_toggle_the_overlay() {
 #[test]
 fn the_overlay_key_is_not_game_input() {
     let input = with_events(vec![key_event(Key::F1, true, false)]);
-    assert_eq!(sample(&input), InputState::default());
+    assert_eq!(sampled(&input), InputState::default());
+}
+
+#[test]
+fn a_rebound_control_follows_its_new_key() {
+    let mut keys = KeyBindings::default();
+    assert!(keys.bind(Control::Up, FREE_KEY));
+
+    assert_eq!(sample(&holding(&[FREE_KEY]), &keys).dir, Some(Dir::Up));
+    assert_eq!(sample(&holding(&[Key::ArrowUp]), &keys).dir, None);
+}
+
+#[test]
+fn rebound_draw_buttons_follow_their_new_keys() {
+    let mut keys = KeyBindings::default();
+    assert!(keys.bind(Control::Slow, FREE_KEY));
+
+    let input = sample(&holding(&[FREE_KEY]), &keys);
+
+    assert!(input.slow);
+    assert!(!input.fast);
+}
+
+#[test]
+fn a_fresh_f2_press_opens_the_settings() {
+    assert!(settings_opened(&with_events(vec![key_event(
+        Key::F2,
+        true,
+        false
+    )])));
+    assert!(!settings_opened(&with_events(vec![key_event(
+        Key::F2,
+        true,
+        true
+    )])));
+}
+
+#[test]
+fn pressed_keys_lists_fresh_presses_in_order() {
+    let input = with_events(vec![
+        key_event(Key::A, true, false),
+        key_event(Key::B, true, true),
+        key_event(Key::C, false, false),
+        key_event(Key::D, true, false),
+    ]);
+
+    assert_eq!(pressed_keys(&input), vec![Key::A, Key::D]);
 }

@@ -1,4 +1,4 @@
-use crate::tuning::{INITIALS_LEN, INITIALS_REPEAT_DELAY_TICKS, INITIALS_REPEAT_TICKS};
+use crate::tuning::{INITIALS_LEN, REPEAT_DELAY_TICKS, REPEAT_TICKS};
 use crate::{Dir, Initials, InitialsEntry, InputState, InvalidInitials};
 
 /// Letters from A to Z: stepping a letter this many times comes back to it.
@@ -133,7 +133,7 @@ fn a_direction_with_confirm_acts_before_it() {
 /// letter, over the first [`REPEATS`] repeats.
 fn count_steps() -> Vec<u32> {
     let mut entry = InitialsEntry::new();
-    let ticks = INITIALS_REPEAT_DELAY_TICKS + REPEATS * INITIALS_REPEAT_TICKS;
+    let ticks = REPEAT_DELAY_TICKS + REPEATS * REPEAT_TICKS;
     let mut steps = Vec::new();
     for tick in 0..=ticks {
         let before = entry.initials();
@@ -147,7 +147,7 @@ fn count_steps() -> Vec<u32> {
 
 #[test]
 fn a_held_direction_repeats_after_a_delay() {
-    let repeats = (0..=REPEATS).map(|n| INITIALS_REPEAT_DELAY_TICKS + n * INITIALS_REPEAT_TICKS);
+    let repeats = (0..=REPEATS).map(|n| REPEAT_DELAY_TICKS + n * REPEAT_TICKS);
     let expected: Vec<_> = std::iter::once(0).chain(repeats).collect();
 
     assert_eq!(count_steps(), expected);

@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 eframe = { version = "0.37", features = ["persistence"] }
 qix-core.workspace = true
+serde = { version = "1", features = ["derive"] }
 
 [lints]
 workspace = true

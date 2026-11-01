@@ -20,6 +20,7 @@ pub mod level;
 pub mod marker;
 pub mod qix;
 pub mod rng;
+pub mod rules;
 pub mod score;
 mod segment;
 pub mod sparx;
@@ -60,6 +61,8 @@ mod qix_test;
 #[cfg(test)]
 mod rng_test;
 #[cfg(test)]
+mod rules_test;
+#[cfg(test)]
 mod score_test;
 #[cfg(test)]
 mod segment_test;
@@ -83,11 +86,12 @@ pub use game::Game;
 pub use geometry::{Dir, Point, in_triangle, segments_intersect};
 pub use high_score::{HighScore, HighScores};
 pub use initials::{Initials, InitialsEntry, InvalidInitials};
-pub use input::InputState;
+pub use input::{DirRepeat, InputState};
 pub use level::{ClaimThreshold, LevelConfig};
 pub use marker::{Marker, MarkerState};
 pub use qix::Qix;
 pub use rng::Rng;
+pub use rules::{Rules, StartingLives};
 pub use score::{Score, score_for_claim};
 pub use sparx::{Sparx, SparxKind};
 pub use sparx_meter::{MeterExpiry, SparxMeter};
