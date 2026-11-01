@@ -11,7 +11,7 @@ const SCORE_STEP: u32 = 1500;
 
 /// A [`Storage`] in memory.
 #[derive(Default)]
-struct MemoryStorage(HashMap<String, String>);
+pub(crate) struct MemoryStorage(HashMap<String, String>);
 
 impl Storage for MemoryStorage {
     fn get_string(&self, key: &str) -> Option<String> {
@@ -29,7 +29,7 @@ impl Storage for MemoryStorage {
     fn flush(&mut self) {}
 }
 
-fn entry(name: &str, score: u32) -> HighScore {
+pub(crate) fn entry(name: &str, score: u32) -> HighScore {
     HighScore {
         name: Initials::try_from(name.to_owned()).unwrap(),
         score,
@@ -47,7 +47,8 @@ fn full_table() -> HighScores {
     table
 }
 
-fn stored(value: &str) -> MemoryStorage {
+/// A storage holding `value` under [`HIGH_SCORES_KEY`].
+pub(crate) fn stored(value: &str) -> MemoryStorage {
     let mut storage = MemoryStorage::default();
     storage.set_string(HIGH_SCORES_KEY, value.to_owned());
     storage
@@ -105,19 +106,35 @@ fn without_storage_or_a_stored_table_the_table_is_empty() {
 
 #[test]
 fn a_table_that_does_not_decode_loads_empty() {
-    for value in [
-        "",
-        "not ron",
-        r#"[(name:"toolong",score:1)]"#,
-        r#"[(name:"abc",score:1)]"#,
-        r#"[(name:"ABC",score:-1)]"#,
-        r#"[(name:"ABC")]"#,
-    ] {
+    for value in ["", "not ron", "(name:\"ABC\",score:1)", "[(name:\"ABC\""] {
         let storage = stored(value);
         assert_eq!(
             load_high_scores(Some(&storage)),
             HighScores::default(),
             "{value:?}"
+        );
+    }
+}
+
+#[test]
+fn an_invalid_entry_is_dropped_and_the_others_kept() {
+    for bad in [
+        r#"(name:"toolong",score:1)"#,
+        r#"(name:"abc",score:1)"#,
+        r#"(name:"A1C",score:1)"#,
+        r#"(name:"ABC",score:-1)"#,
+        r#"(name:"ABC",score:4294967296)"#,
+        r#"(name:"ABC")"#,
+        r#""ABC""#,
+        "7",
+    ] {
+        let storage = stored(&format!(
+            r#"[(name:"TOP",score:900),{bad},(name:"LOW",score:100)]"#
+        ));
+        assert_eq!(
+            load_high_scores(Some(&storage)),
+            HighScores::from(vec![entry("TOP", 900), entry("LOW", 100)]),
+            "{bad:?}"
         );
     }
 }

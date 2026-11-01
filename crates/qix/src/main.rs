@@ -10,6 +10,8 @@ mod render;
 mod timestep;
 
 #[cfg(test)]
+mod app_test;
+#[cfg(test)]
 mod input_test;
 #[cfg(test)]
 mod numbers_test;

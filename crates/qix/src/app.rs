@@ -67,16 +67,32 @@ impl QixApp {
     /// Writes the high score table to `frame`'s storage and flushes it as
     /// soon as an entry changes it, rather than at eframe's next save.
     fn save_new_high_scores(&mut self, frame: &mut eframe::Frame) {
-        let high_scores = self.session.high_scores();
-        if *high_scores == self.saved_high_scores {
-            return;
-        }
-        if let Some(storage) = frame.storage_mut() {
-            persist::save_high_scores(storage, high_scores);
-            storage.flush();
-        }
-        self.saved_high_scores = high_scores.clone();
+        save_if_changed(
+            frame
+                .storage_mut()
+                .map(|storage| storage as &mut dyn Storage),
+            &mut self.saved_high_scores,
+            self.session.high_scores(),
+        );
     }
+}
+
+/// Writes `high_scores` to `storage` and flushes it when they differ from
+/// `saved`, the table last written, then records them as saved; does
+/// nothing when they are the same.
+pub fn save_if_changed(
+    storage: Option<&mut dyn Storage>,
+    saved: &mut HighScores,
+    high_scores: &HighScores,
+) {
+    if high_scores == saved {
+        return;
+    }
+    if let Some(storage) = storage {
+        persist::save_high_scores(storage, high_scores);
+        storage.flush();
+    }
+    saved.clone_from(high_scores);
 }
 
 impl eframe::App for QixApp {

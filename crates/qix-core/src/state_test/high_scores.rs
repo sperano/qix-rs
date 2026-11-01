@@ -8,6 +8,9 @@ use crate::{Dir, GameState, HighScore, HighScores, Initials, InitialsEntry, Inpu
 /// The score of every entry of the table a session starts with.
 const OLD_SCORE: u32 = 1234;
 
+/// The score of the entries a game's points beat.
+const LOW_SCORE: u32 = 1;
+
 /// Ticks the tests that expect the entry to wait run.
 const IDLE_TICKS: u32 = 20;
 
@@ -117,6 +120,47 @@ fn the_entered_initials_put_the_score_in_the_table() {
     assert_eq!(session.high_scores().entries(), [expected]);
     assert_eq!(session.game().score().points(), 0);
     assert_eq!(session.high_score(), points);
+}
+
+#[test]
+fn the_entered_initials_go_above_a_lower_score() {
+    let old = HighScore {
+        name: initials("OLD"),
+        score: LOW_SCORE,
+    };
+    let mut session = scored_game_over(HighScores::from(vec![old]));
+    let points = session.game().score().points();
+    session.tick(&CONFIRM);
+
+    confirm_initials(&mut session);
+
+    let new = HighScore {
+        name: Initials::FIRST,
+        score: points,
+    };
+    assert_eq!(session.high_scores().entries(), [new, old]);
+}
+
+#[test]
+fn a_full_table_admits_a_higher_score() {
+    let mut session = scored_game_over(table_of(LOW_SCORE));
+    let points = session.game().score().points();
+
+    session.tick(&CONFIRM);
+    assert_eq!(
+        session.state(),
+        GameState::HighScoreEntry(InitialsEntry::new())
+    );
+    confirm_initials(&mut session);
+
+    let entries = session.high_scores().entries();
+    assert_eq!(entries.len(), HIGH_SCORE_COUNT);
+    let new = HighScore {
+        name: Initials::FIRST,
+        score: points,
+    };
+    assert_eq!(entries[0], new);
+    assert!(entries[1..].iter().all(|entry| entry.score == LOW_SCORE));
 }
 
 #[test]

@@ -199,6 +199,33 @@ fn a_screen_adds_its_heading_each_row_and_each_line_over_the_playfield() {
     );
 }
 
+/// The text of each text shape of `shapes`, in painting order.
+fn texts(shapes: &[Shape]) -> Vec<String> {
+    shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Text(text) => Some(text.galley.text().to_owned()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_title_paints_the_high_scores_between_the_heading_and_the_controls() {
+    let table = HighScores::from(vec![HighScore {
+        name: Initials::FIRST,
+        score: 1,
+    }]);
+    let screen = title(&table);
+
+    let shapes = painted_with(&Game::new(Rng::new(SEED)), Some(&screen), false);
+
+    assert_eq!(
+        texts(&shapes)[..3],
+        ["QIX", "1. AAA  1", "Up/Down/Left/Right: move"]
+    );
+}
+
 #[test]
 fn the_overlay_stays_above_a_screen() {
     let shapes = painted_with(&Game::new(Rng::new(SEED)), Some(&paused()), true);
@@ -234,16 +261,8 @@ fn the_hud_is_painted_in_its_strip() {
     let strip = hud_strip();
     let shapes = painted_all(&game, &hud::hud(&game, 0), None, false);
     let in_hud = |shape: &&Shape| strip.contains_rect(shape.visual_bounding_rect());
-    let texts = shapes
-        .iter()
-        .filter(in_hud)
-        .filter(|s| matches!(s, Shape::Text(_)));
-    let texts: Vec<_> = texts
-        .filter_map(|shape| match shape {
-            Shape::Text(text) => Some(text.galley.text().to_owned()),
-            _ => None,
-        })
-        .collect();
+    let in_hud: Vec<_> = shapes.iter().filter(in_hud).cloned().collect();
+    let texts = texts(&in_hud);
     assert!(texts.contains(&"SCORE".to_owned()), "{texts:?}");
     assert!(texts.contains(&"0.0% / 75%".to_owned()), "{texts:?}");
 }

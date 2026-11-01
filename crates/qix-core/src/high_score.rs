@@ -1,6 +1,7 @@
 //! The high score table: the best [`HIGH_SCORE_COUNT`] scores, each with
 //! the initials of who made it.
 
+use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
 
 use crate::initials::Initials;
@@ -16,11 +17,13 @@ pub struct HighScore {
 /// The best scores, best first, at most [`HIGH_SCORE_COUNT`] of them; a
 /// score equal to one already in the table ranks below it.
 ///
-/// It serialises as the list of its entries. Deserialising goes through
-/// [`From<Vec<HighScore>>`], so a stored list edited by hand still makes
-/// a valid table.
+/// It serialises as the list of its entries. Deserialising skips each
+/// entry that is not a valid [`HighScore`] (bad initials, a score out of
+/// range, a missing field), then goes through [`From<Vec<HighScore>>`],
+/// so a stored list edited by hand still makes a valid table; only a
+/// value that is not a list at all fails.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(from = "Vec<HighScore>", into = "Vec<HighScore>")]
+#[serde(from = "Vec<StoredEntry>", into = "Vec<HighScore>")]
 pub struct HighScores {
     entries: Vec<HighScore>,
 }
@@ -73,6 +76,27 @@ impl From<Vec<HighScore>> for HighScores {
         entries.sort_by_key(|entry| std::cmp::Reverse(entry.score));
         entries.truncate(HIGH_SCORE_COUNT);
         Self { entries }
+    }
+}
+
+/// One element of a stored table: an entry, or anything else, which the
+/// table skips.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredEntry {
+    Valid(HighScore),
+    Invalid(IgnoredAny),
+}
+
+impl From<Vec<StoredEntry>> for HighScores {
+    /// The table of the valid entries of `stored`, as
+    /// [`From<Vec<HighScore>>`] makes it.
+    fn from(stored: Vec<StoredEntry>) -> Self {
+        let entries = stored.into_iter().filter_map(|entry| match entry {
+            StoredEntry::Valid(entry) => Some(entry),
+            StoredEntry::Invalid(_) => None,
+        });
+        Self::from(entries.collect::<Vec<_>>())
     }
 }
 

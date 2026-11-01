@@ -1,12 +1,20 @@
 use qix_core::tuning::{HIGH_SCORE_COUNT, POINTS_PER_CELL};
 use qix_core::{Dir, GameState, HighScore, HighScores, Initials, InitialsEntry, InputState};
 
+use qix_core::Session;
+
 use crate::numbers::thousands;
 use crate::render::high_score::{high_score_entry, initials_row, table_rows};
 use crate::render::screen::{Screen, screen};
 use crate::render::screen_test::{
-    CLAIMED_CELLS, LEVEL_H, MAX_GAME_TICKS, claimed_game, completed_level, level_game,
+    CLAIMED_CELLS, LEVEL_H, MAX_GAME_TICKS, claimed_game, completed_level_with, level_game,
 };
+
+/// The points of the game [`lost_game`] plays.
+const LOST_GAME_POINTS: &str = "25,120";
+
+/// The game-over line of a score that makes the table.
+const NEW_HIGH_SCORE: &str = "A new high score!";
 
 const CONFIRM: InputState = InputState {
     dir: None,
@@ -21,6 +29,26 @@ fn entry(name: &str, score: u32) -> HighScore {
         name: Initials::try_from(name.to_owned()).unwrap(),
         score,
     }
+}
+
+/// A table of [`HIGH_SCORE_COUNT`] entries no game can beat.
+fn unbeatable_table() -> HighScores {
+    HighScores::from(vec![entry("TOP", u32::MAX); HIGH_SCORE_COUNT])
+}
+
+/// A session with `high_scores` that completed a level, then lost every
+/// life, with points: on its game-over screen.
+fn lost_game(high_scores: HighScores) -> Session {
+    let mut session = completed_level_with(level_game(), LEVEL_H, high_scores);
+    session.tick(&CONFIRM);
+    for _ in 0..MAX_GAME_TICKS {
+        if session.state() == GameState::GameOver {
+            break;
+        }
+        session.tick(&InputState::default());
+    }
+    assert_eq!(session.state(), GameState::GameOver);
+    session
 }
 
 /// Ticks `entry` with `dir` held for one tick, then released.
@@ -93,14 +121,7 @@ fn the_entry_screen_shows_the_initials_the_rank_and_the_controls() {
 
 #[test]
 fn a_session_entering_initials_shows_the_entry_screen() {
-    let mut session = completed_level(level_game(), LEVEL_H);
-    session.tick(&CONFIRM);
-    for _ in 0..MAX_GAME_TICKS {
-        if session.state() == GameState::GameOver {
-            break;
-        }
-        session.tick(&InputState::default());
-    }
+    let mut session = lost_game(HighScores::default());
     session.tick(&CONFIRM);
     let GameState::HighScoreEntry(entry) = session.state() else {
         panic!("not entering initials: {:?}", session.state());
@@ -115,4 +136,37 @@ fn a_session_entering_initials_shows_the_entry_screen() {
             thousands(session.game().score().points())
         )
     );
+}
+
+#[test]
+fn the_entry_screen_ranks_the_score_in_the_sessions_table() {
+    let mut session = lost_game(HighScores::from(vec![entry("TOP", u32::MAX)]));
+    session.tick(&CONFIRM);
+    assert!(matches!(session.state(), GameState::HighScoreEntry(_)));
+
+    assert_eq!(
+        screen(&session).unwrap().lines[0],
+        format!("Score {LOST_GAME_POINTS}, rank 2")
+    );
+}
+
+#[test]
+fn a_lost_game_that_makes_the_table_says_so() {
+    let session = lost_game(HighScores::default());
+
+    assert!(
+        screen(&session)
+            .unwrap()
+            .lines
+            .contains(&NEW_HIGH_SCORE.to_owned())
+    );
+}
+
+#[test]
+fn a_lost_game_off_the_sessions_table_says_nothing_of_a_high_score() {
+    let session = lost_game(unbeatable_table());
+
+    let lines = screen(&session).unwrap().lines;
+    assert_eq!(lines[0], format!("Final score {LOST_GAME_POINTS}"));
+    assert!(!lines.contains(&NEW_HIGH_SCORE.to_owned()), "{lines:?}");
 }

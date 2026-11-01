@@ -129,7 +129,12 @@ fn split_game() -> Game {
 /// A session over `game`, `height` cells high, started from the title,
 /// that drew a fast stix up the middle and completed the level.
 pub(super) fn completed_level(game: Game, height: u16) -> Session {
-    let mut session = Session::new(game);
+    completed_level_with(game, height, HighScores::default())
+}
+
+/// [`completed_level`] in a session with `high_scores`.
+pub(super) fn completed_level_with(game: Game, height: u16, high_scores: HighScores) -> Session {
+    let mut session = Session::with_high_scores(game, high_scores);
     session.tick(&press(true, false));
     let input = InputState {
         dir: Some(Dir::Up),
@@ -186,6 +191,26 @@ fn lost_game() -> Session {
 #[test]
 fn a_new_session_shows_the_title_screen() {
     assert_eq!(screen(&new_session()), Some(title(&HighScores::default())));
+}
+
+#[test]
+fn a_session_with_high_scores_shows_them_on_the_title() {
+    let table = HighScores::from(vec![
+        HighScore {
+            name: Initials::try_from("QIX".to_owned()).unwrap(),
+            score: 12_345,
+        },
+        HighScore {
+            name: Initials::FIRST,
+            score: 10,
+        },
+    ]);
+    let session = Session::with_high_scores(Game::new(Rng::new(SEED)), table.clone());
+
+    let shown = screen(&session).unwrap();
+
+    assert_eq!(shown.table, ["1. QIX  12,345", "2. AAA      10"]);
+    assert_eq!(shown, title(&table));
 }
 
 #[test]
@@ -287,7 +312,7 @@ fn game_over_says_nothing_of_a_score_off_the_table() {
 }
 
 #[test]
-fn the_title_screen_lists_the_high_scores_above_the_controls() {
+fn the_title_screen_lists_the_high_scores_and_the_controls() {
     let table = HighScores::from(vec![HighScore {
         name: Initials::FIRST,
         score: 1,
