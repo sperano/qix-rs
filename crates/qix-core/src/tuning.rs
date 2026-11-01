@@ -133,3 +133,17 @@ pub const SPARX_METER_TICKS_PER_LEVEL: u32 = 2 * TICK_HZ;
 /// Sparx the Sparx meter releases at the top centre when it first runs
 /// out.
 pub const EXTRA_SPARX: usize = 2;
+
+/// Scores the high score table keeps, best first.
+pub const HIGH_SCORE_COUNT: usize = 10;
+
+/// Letters in the initials that name a high score.
+pub const INITIALS_LEN: usize = 3;
+
+/// Ticks a direction is held while entering initials before it repeats:
+/// a third of a second.
+pub const INITIALS_REPEAT_DELAY_TICKS: u32 = TICK_HZ / 3;
+
+/// Ticks between two repeats of a direction held while entering
+/// initials: ten a second.
+pub const INITIALS_REPEAT_TICKS: u32 = TICK_HZ / 10;

@@ -1,7 +1,9 @@
 use eframe::egui::{self, Pos2, Rect, Shape, Vec2, pos2, vec2};
 use qix_core::tuning::MARKER_STEP_TICKS;
 use qix_core::tuning::{BOARD_H, BOARD_W};
-use qix_core::{Board, Cell, Dir, DrawKind, Game, InputState, Qix, Rng};
+use qix_core::{
+    Board, Cell, Dir, DrawKind, Game, HighScore, HighScores, Initials, InputState, Qix, Rng,
+};
 
 use crate::palette;
 use crate::playfield::{hud_units, letterbox, playfield_units, show, to_screen, window_units};
@@ -10,6 +12,10 @@ use crate::render::screen::{Screen, paused, title};
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1;
+
+/// High scores on the title screen painted by
+/// [`a_screen_adds_its_heading_each_row_and_each_line_over_the_playfield`].
+const TITLE_SCORES: u32 = 3;
 
 /// Tolerance for comparing screen coordinates, in points.
 const EPSILON: f32 = 1e-3;
@@ -172,17 +178,51 @@ fn the_overlay_adds_its_text() {
 }
 
 #[test]
-fn a_screen_adds_its_heading_and_each_line_over_the_playfield() {
+fn a_screen_adds_its_heading_each_row_and_each_line_over_the_playfield() {
     let game = Game::new(Rng::new(SEED));
-    let screen = title();
+    let table = (1..=TITLE_SCORES)
+        .map(|score| HighScore {
+            name: Initials::FIRST,
+            score,
+        })
+        .collect::<Vec<_>>();
+    let screen = title(&HighScores::from(table));
+    assert_eq!(screen.table.len(), usize::try_from(TITLE_SCORES).unwrap());
     let shapes = painted_with(&game, Some(&screen), false);
     let texts = count(&shapes, |s| matches!(s, Shape::Text(_)));
-    assert_eq!(texts, 1 + screen.lines.len());
+    assert_eq!(texts, 1 + screen.table.len() + screen.lines.len());
     let field = painted(&game, false);
     assert_eq!(
         shapes[..field.len()],
         field[..],
         "the playfield is not painted under the screen"
+    );
+}
+
+/// The text of each text shape of `shapes`, in painting order.
+fn texts(shapes: &[Shape]) -> Vec<String> {
+    shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Text(text) => Some(text.galley.text().to_owned()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_title_paints_the_high_scores_between_the_heading_and_the_controls() {
+    let table = HighScores::from(vec![HighScore {
+        name: Initials::FIRST,
+        score: 1,
+    }]);
+    let screen = title(&table);
+
+    let shapes = painted_with(&Game::new(Rng::new(SEED)), Some(&screen), false);
+
+    assert_eq!(
+        texts(&shapes)[..3],
+        ["QIX", "1. AAA  1", "Up/Down/Left/Right: move"]
     );
 }
 
@@ -221,16 +261,8 @@ fn the_hud_is_painted_in_its_strip() {
     let strip = hud_strip();
     let shapes = painted_all(&game, &hud::hud(&game, 0), None, false);
     let in_hud = |shape: &&Shape| strip.contains_rect(shape.visual_bounding_rect());
-    let texts = shapes
-        .iter()
-        .filter(in_hud)
-        .filter(|s| matches!(s, Shape::Text(_)));
-    let texts: Vec<_> = texts
-        .filter_map(|shape| match shape {
-            Shape::Text(text) => Some(text.galley.text().to_owned()),
-            _ => None,
-        })
-        .collect();
+    let in_hud: Vec<_> = shapes.iter().filter(in_hud).cloned().collect();
+    let texts = texts(&in_hud);
     assert!(texts.contains(&"SCORE".to_owned()), "{texts:?}");
     assert!(texts.contains(&"0.0% / 75%".to_owned()), "{texts:?}");
 }

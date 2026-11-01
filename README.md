@@ -11,7 +11,8 @@ Sparx. Slow drawing earns more points but leaves the player exposed longer.
 | Arrow keys | Move |
 | Z | Draw quickly |
 | X | Draw slowly |
-| Enter | Start a game, the next level, or leave the game-over screen |
+| Enter | Start a game, the next level, or leave the game-over screen; after a game over with a high score, go to the initials entry and confirm each letter there |
+| Arrow keys (initials entry) | Up/Down change the letter, Left/Right move between letters |
 | Escape | Pause or resume |
 | F1 | Toggle the debug overlay (claimed percentage, lives, tick count) |
 

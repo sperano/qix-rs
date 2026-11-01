@@ -1,9 +1,12 @@
-use qix_core::tuning::{CLAIM_THRESHOLD_RANGE, MARKER_STEP_TICKS, POINTS_PER_CELL};
+use qix_core::tuning::{
+    CLAIM_THRESHOLD_RANGE, HIGH_SCORE_COUNT, MARKER_STEP_TICKS, POINTS_PER_CELL,
+};
 use qix_core::{
-    Board, Cell, ClaimThreshold, Dir, DrawKind, Game, GameState, InputState, Point, Qix, Rng,
-    Session, Sparx, SparxKind, Vec2,
+    Board, Cell, ClaimThreshold, Dir, DrawKind, Game, GameState, HighScore, HighScores, Initials,
+    InputState, Point, Qix, Rng, Session, Sparx, SparxKind, Vec2,
 };
 
+use crate::render::high_score::table_rows;
 use crate::render::screen::{Screen, game_over, level_complete, paused, screen, title};
 
 /// Seed of every game the tests play.
@@ -18,13 +21,13 @@ const W: u16 = 4;
 const H: u16 = 2;
 
 /// The cells the stix of [`claimed_game`] claims.
-const CLAIMED_CELLS: u32 = 2;
+pub(super) const CLAIMED_CELLS: u32 = 2;
 
 /// Dimensions of the board of [`level_game`]: a stix up column
 /// `LEVEL_W / 2` from the marker's start claims the cells right of it,
 /// leaving the Qix in cell `(0, 0)` on its left.
 const LEVEL_W: u16 = 8;
-const LEVEL_H: u16 = 3;
+pub(super) const LEVEL_H: u16 = 3;
 
 /// Cells [`level_game`] claims before the stix, clear of its column and
 /// of the top row: with the stix, 18 cells of 24.
@@ -41,7 +44,7 @@ const SPLIT_CLAIMED_COLUMNS: [u16; 3] = [1, 6, 7];
 
 /// Ticks a game is given to lose every life to a Sparx circling its
 /// `W x H` border.
-const MAX_GAME_TICKS: u32 = 10_000;
+pub(super) const MAX_GAME_TICKS: u32 = 10_000;
 
 fn press(confirm: bool, pause: bool) -> InputState {
     InputState {
@@ -58,7 +61,7 @@ fn new_session() -> Session {
 /// A game on a `W x H` board with a still Qix in its bottom-right cell
 /// that drew a fast stix up and left from the marker's start, claiming
 /// the [`CLAIMED_CELLS`] cells of the bottom row's left half.
-fn claimed_game() -> Game {
+pub(super) fn claimed_game() -> Game {
     let qix = Qix::new(
         Vec2::new(3.25, 1.5),
         Vec2::new(3.75, 1.5),
@@ -109,7 +112,7 @@ fn low_threshold_game(
 
 /// A game whose stix up the middle completes the level at 75%, 25 points
 /// above the threshold.
-fn level_game() -> Game {
+pub(super) fn level_game() -> Game {
     low_threshold_game((LEVEL_W, LEVEL_H), LEVEL_CLAIMED, vec![qix_at(0, 0)])
 }
 
@@ -125,8 +128,13 @@ fn split_game() -> Game {
 
 /// A session over `game`, `height` cells high, started from the title,
 /// that drew a fast stix up the middle and completed the level.
-fn completed_level(game: Game, height: u16) -> Session {
-    let mut session = Session::new(game);
+pub(super) fn completed_level(game: Game, height: u16) -> Session {
+    completed_level_with(game, height, HighScores::default())
+}
+
+/// [`completed_level`] in a session with `high_scores`.
+pub(super) fn completed_level_with(game: Game, height: u16, high_scores: HighScores) -> Session {
+    let mut session = Session::with_high_scores(game, high_scores);
     session.tick(&press(true, false));
     let input = InputState {
         dir: Some(Dir::Up),
@@ -182,15 +190,36 @@ fn lost_game() -> Session {
 
 #[test]
 fn a_new_session_shows_the_title_screen() {
-    assert_eq!(screen(&new_session()), Some(title()));
+    assert_eq!(screen(&new_session()), Some(title(&HighScores::default())));
+}
+
+#[test]
+fn a_session_with_high_scores_shows_them_on_the_title() {
+    let table = HighScores::from(vec![
+        HighScore {
+            name: Initials::try_from("QIX".to_owned()).unwrap(),
+            score: 12_345,
+        },
+        HighScore {
+            name: Initials::FIRST,
+            score: 10,
+        },
+    ]);
+    let session = Session::with_high_scores(Game::new(Rng::new(SEED)), table.clone());
+
+    let shown = screen(&session).unwrap();
+
+    assert_eq!(shown.table, ["1. QIX  12,345", "2. AAA      10"]);
+    assert_eq!(shown, title(&table));
 }
 
 #[test]
 fn the_title_screen_lists_the_controls() {
     assert_eq!(
-        title(),
+        title(&HighScores::default()),
         Screen {
             heading: "QIX".to_owned(),
+            table: Vec::new(),
             lines: vec![
                 "Up/Down/Left/Right: move".to_owned(),
                 "hold Z while moving: draw fast".to_owned(),
@@ -228,6 +257,7 @@ fn a_completed_level_shows_the_claim_the_bonus_and_the_multiplier() {
         level_complete(&game, 0.8125, 6000, false),
         Screen {
             heading: "LEVEL 1 COMPLETE".to_owned(),
+            table: Vec::new(),
             lines: vec![
                 "Claimed 81.2%".to_owned(),
                 "Bonus 6,000".to_owned(),
@@ -252,9 +282,10 @@ fn game_over_shows_the_final_score() {
     let points = CLAIMED_CELLS * POINTS_PER_CELL;
     assert_eq!(game.score().points(), points);
     assert_eq!(
-        game_over(&game).lines,
+        game_over(&game, &HighScores::default()).lines,
         [
             format!("Final score {points}"),
+            "A new high score!".to_owned(),
             String::new(),
             "Press Enter to continue".to_owned(),
         ]
@@ -262,11 +293,46 @@ fn game_over_shows_the_final_score() {
 }
 
 #[test]
+fn game_over_says_nothing_of_a_score_off_the_table() {
+    let game = claimed_game();
+    let best = HighScore {
+        name: Initials::FIRST,
+        score: u32::MAX,
+    };
+    let table = HighScores::from(vec![best; HIGH_SCORE_COUNT]);
+
+    assert_eq!(
+        game_over(&game, &table).lines,
+        [
+            format!("Final score {}", game.score().points()),
+            String::new(),
+            "Press Enter to continue".to_owned(),
+        ]
+    );
+}
+
+#[test]
+fn the_title_screen_lists_the_high_scores_and_the_controls() {
+    let table = HighScores::from(vec![HighScore {
+        name: Initials::FIRST,
+        score: 1,
+    }]);
+
+    let title = title(&table);
+
+    assert_eq!(title.table, table_rows(&table));
+    assert_eq!(title.lines, self::title(&HighScores::default()).lines);
+}
+
+#[test]
 fn the_final_score_has_thousands_separators() {
     let session = completed_level(level_game(), LEVEL_H);
     let game = session.game();
     assert_eq!(game.score().points(), 25_120);
-    assert_eq!(game_over(game).lines[0], "Final score 25,120");
+    assert_eq!(
+        game_over(game, &HighScores::default()).lines[0],
+        "Final score 25,120"
+    );
 }
 
 #[test]
@@ -294,5 +360,8 @@ fn a_split_level_shows_the_split() {
 fn a_lost_game_shows_the_game_over_screen() {
     let session = lost_game();
     assert_eq!(session.state(), GameState::GameOver);
-    assert_eq!(screen(&session), Some(game_over(session.game())));
+    assert_eq!(
+        screen(&session),
+        Some(game_over(session.game(), session.high_scores()))
+    );
 }

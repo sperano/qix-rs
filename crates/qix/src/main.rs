@@ -4,14 +4,19 @@ mod app;
 mod input;
 mod numbers;
 mod palette;
+mod persist;
 mod playfield;
 mod render;
 mod timestep;
 
 #[cfg(test)]
+mod app_test;
+#[cfg(test)]
 mod input_test;
 #[cfg(test)]
 mod numbers_test;
+#[cfg(test)]
+mod persist_test;
 #[cfg(test)]
 mod playfield_test;
 #[cfg(test)]
@@ -39,6 +44,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         APP_NAME,
         options,
-        Box::new(|_cc| Ok(Box::<app::QixApp>::default())),
+        Box::new(|cc| Ok(Box::new(app::QixApp::new(cc.storage)))),
     )
 }

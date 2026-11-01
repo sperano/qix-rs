@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-eframe = "0.37"
+eframe = { version = "0.37", features = ["persistence"] }
 qix-core.workspace = true
 
 [lints]
