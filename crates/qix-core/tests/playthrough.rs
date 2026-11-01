@@ -44,9 +44,11 @@ const INTO_QIX_STEPS: u32 = BOARD_H as u32 / 2;
 /// burns along.
 const FUSE_STIX_STEPS: u32 = 4;
 
-/// Ticks the marker stands still on its stix: as many as the fuse needs
-/// to be lit and to burn along the stix to the marker.
-const STAND_TICKS: u32 = FUSE_DELAY_TICKS + FUSE_STIX_STEPS * FUSE_STEP_TICKS;
+/// Ticks the marker stands still on its stix: exactly as many as the
+/// fuse needs to be lit and to burn to the marker. The fuse burns one
+/// stix segment every [`FUSE_STEP_TICKS`], and the straight stix of
+/// [`FUSE_STIX_STEPS`] lattice steps is a single segment.
+const STAND_TICKS: u32 = FUSE_DELAY_TICKS + FUSE_STEP_TICKS;
 
 /// Ticks of the grace period after a death that the script sits out.
 const GRACE_WAIT_TICKS: u32 = RESPAWN_GRACE_TICKS;
@@ -242,12 +244,15 @@ fn the_second_level_loses_every_life_and_scores_nothing() {
 }
 
 #[test]
-fn the_fuse_reaches_the_marker_while_it_stands() {
+fn the_fuse_reaches_the_marker_on_the_last_stand_tick() {
     let mut session = new_session();
     play(&mut session, LEVEL_ONE);
-    let events = play(&mut session, LEVEL_TWO_FUSE);
-    assert_eq!(deaths(&events), [DeathCause::Fuse]);
-    assert_eq!(events.last(), Some(&Event::Death(DeathCause::Fuse)));
+    let (last_tick, before) = LEVEL_TWO_FUSE.split_last().expect("a stand");
+    let early = DemoStep::idle(last_tick.ticks - 1);
+    let events = play(&mut session, &[before, &[early]].concat());
+    assert_eq!(deaths(&events), []);
+    let events = play(&mut session, &[DemoStep::idle(1)]);
+    assert_eq!(events, [Event::Death(DeathCause::Fuse)]);
 }
 
 #[test]
