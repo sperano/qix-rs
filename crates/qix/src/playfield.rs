@@ -1,7 +1,7 @@
 //! The letterboxed playfield and the HUD above it: where they sit in the
 //! window and how they are painted.
 
-use eframe::egui::{self, Frame, Pos2, Rect, Sense, emath::RectTransform, pos2, vec2};
+use eframe::egui::{self, Frame, Pos2, Rect, Sense, TextureId, emath::RectTransform, pos2, vec2};
 use qix_core::Game;
 use qix_core::tuning::{BOARD_H, BOARD_W};
 
@@ -73,6 +73,8 @@ pub enum Placement {
 pub struct Scene<'a> {
     /// The game whose board and enemies are painted.
     pub game: &'a Game,
+    /// The texture of the claimed cells of the game's board.
+    pub claimed: TextureId,
     /// The HUD above the playfield.
     pub hud: &'a Hud,
     /// The cells of the claim being animated, and how far its animation
@@ -93,7 +95,7 @@ pub fn show(ui: &mut egui::Ui, scene: &Scene) {
     let to_screen = to_screen(response.rect);
     let field = to_screen.transform_rect(playfield_units());
     painter.rect_filled(field, 0.0, palette::PLAYFIELD_BACKGROUND);
-    render::board::paint(&painter, to_screen, scene.game, scene.claim);
+    render::board::paint(&painter, to_screen, scene.game, scene.claimed, scene.claim);
     render::enemies::paint(&painter, to_screen, scene.game);
     hud::paint(&painter, to_screen.transform_rect(hud_units()), scene.hud);
     match scene.screen {

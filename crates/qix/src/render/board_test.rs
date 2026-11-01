@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use eframe::egui::{self, Color32, Pos2, Rect, Shape, emath::RectTransform, pos2};
+use eframe::egui::{self, Color32, Pos2, Rect, Shape, TextureId, emath::RectTransform, pos2};
 use eframe::epaint::ColorMode;
 use qix_core::tuning::{BOARD_H, BOARD_W};
 use qix_core::{Board, Cell, Dir, DrawKind, Game, InputState, Point, Rng, Stix};
@@ -218,6 +218,9 @@ fn the_marker_takes_the_colour_of_the_kind_of_the_last_segment() {
 /// Screen points per playfield unit in [`painted`].
 const SCALE: f32 = 5.0;
 
+/// The texture of the claimed cells [`painted`] hands the board.
+const CLAIMED_TEXTURE: TextureId = TextureId::User(1);
+
 /// Runs one headless egui frame painting `game`'s board at [`SCALE`]
 /// points per unit and returns the shapes.
 fn painted(game: &Game) -> Vec<Shape> {
@@ -229,7 +232,9 @@ fn painted(game: &Game) -> Vec<Shape> {
         screen_rect: Some(*to_screen.to()),
         ..egui::RawInput::default()
     };
-    let mut output = ctx.run_ui(input, |ui| paint(ui.painter(), to_screen, game, None));
+    let mut output = ctx.run_ui(input, |ui| {
+        paint(ui.painter(), to_screen, game, CLAIMED_TEXTURE, None)
+    });
     // No renderer uploads the font atlas here; dropping it unapplied panics.
     output.textures_delta.clear();
     output
@@ -237,6 +242,17 @@ fn painted(game: &Game) -> Vec<Shape> {
         .into_iter()
         .map(|clipped| clipped.shape)
         .collect()
+}
+
+#[test]
+fn the_claimed_cells_are_painted_first_as_their_texture_over_the_board() {
+    let shapes = painted(&Game::new(Rng::new(SEED)));
+    let Some(Shape::Mesh(mesh)) = shapes.first() else {
+        panic!("the claimed cells are not painted first: {shapes:?}");
+    };
+    assert_eq!(mesh.texture_id, CLAIMED_TEXTURE);
+    let board = pos2(f32::from(BOARD_W) * SCALE, f32::from(BOARD_H) * SCALE);
+    assert_eq!(mesh.calc_bounds(), Rect::from_min_max(Pos2::ZERO, board));
 }
 
 #[test]

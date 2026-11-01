@@ -2,6 +2,7 @@
 
 pub mod board;
 pub mod claim_fill;
+pub mod claimed;
 pub mod enemies;
 pub mod high_score;
 pub mod hud;
@@ -14,6 +15,8 @@ pub mod sprite;
 mod board_test;
 #[cfg(test)]
 mod claim_fill_test;
+#[cfg(test)]
+mod claimed_test;
 #[cfg(test)]
 mod enemies_test;
 #[cfg(test)]
