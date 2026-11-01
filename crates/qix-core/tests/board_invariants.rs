@@ -1,76 +1,187 @@
-//! Board invariants over random legal draw sequences played through
-//! [`Game::tick`]: plain loops over the game's seeded generator, until the
-//! simulation harness brings `proptest`.
+//! Board invariants as `proptest` properties: random legal input
+//! sequences played through [`Game::tick`] on small boards, with every
+//! invariant checked after every tick.
+//!
+//! An input sequence is a list of [`Action`]s, each read against the game
+//! it is played on: a move picks one of the marker's legal moves, a wait
+//! holds nothing for a while. A case ends when the actions run out, the
+//! game is over, the level is complete or a stix is caught in a dead end.
 
-use std::cell::Cell;
+use proptest::prelude::*;
+use proptest::sample::Index;
+use proptest::strategy::ValueTree;
+use proptest::test_runner::{FileFailurePersistence, TestCaseError, TestRunner};
 
 use qix_core::stix::legal_moves;
-use qix_core::tuning::{CLAIM_THRESHOLD_RANGE, SLOW_STEP_TICKS};
+use qix_core::tuning::{CLAIM_THRESHOLD_RANGE, FUSE_DELAY_TICKS, QIX_SPEED, SLOW_STEP_TICKS};
 use qix_core::{
-    Board, ClaimThreshold, Dir, DrawKind, Event, Game, InputState, MarkerState, Qix, Sparx,
-    SparxKind, Stix, Vec2,
+    Board, Cell, ClaimThreshold, DeathCause, Dir, DrawKind, Event, Game, InputState, MarkerState,
+    Qix, Rng, Sparx, SparxKind, Stix, Vec2,
 };
 
-/// Dimensions of the board the runs play on: small, so that random stix
-/// reach the border before they wind themselves into a dead end.
-const W: u16 = 12;
-const H: u16 = 9;
+/// Dimensions of the boards the cases play on: small, so that random
+/// stix reach the border before they wind themselves into a dead end.
+const WIDTHS: std::ops::RangeInclusive<u16> = 8..=16;
+const HEIGHTS: std::ops::RangeInclusive<u16> = 6..=12;
 
-/// Seeds of the runs, one deterministic run each.
-const SEEDS: [u64; 8] = [1, 2, 3, 5, 8, 13, 21, 34];
+/// Actions a case plays at most.
+const MAX_ACTIONS: usize = 300;
 
-/// Games a run plays, each on a fresh board.
-const GAMES_PER_RUN: u32 = 30;
+/// The odds of an action being a move against it being a wait.
+const MOVE_WEIGHT: u32 = 19;
+const WAIT_WEIGHT: u32 = 1;
 
-/// Moves a game plays at most; a stix caught in a dead end ends it sooner.
-const MOVES_PER_GAME: u32 = 300;
+/// Ticks a wait lasts at most: enough for the fuse to be lit and burn.
+const MAX_WAIT_TICKS: u32 = 3 * FUSE_DELAY_TICKS;
 
-/// Chance, in percent, that the marker leaves the border when it can.
-const START_DRAW_PERCENT: u64 = 30;
+/// Chance that the marker leaves the border when it can.
+const START_DRAW_CHANCE: f64 = 0.3;
 
-/// Chance, in percent, that a stix keeps its heading when it can: straight
-/// runs reach the border more often than a random walk.
-const KEEP_HEADING_PERCENT: u64 = 70;
+/// Chance that a stix keeps its heading when it can: straight runs reach
+/// the border more often than a random walk.
+const KEEP_HEADING_CHANCE: f64 = 0.7;
 
-/// Chance, in percent, that a stix step is drawn fast rather than slow.
-const FAST_DRAW_PERCENT: u64 = 50;
+/// Length of each Qix, in playfield units: short enough for the small
+/// boards.
+const QIX_LENGTH: f32 = 1.0;
 
-/// Stix a run must close for the invariants to have been put to the test.
-const MIN_CLOSES_PER_RUN: u32 = 20;
+/// Spacing of the points the free-cell check samples along a Qix,
+/// independently of the cell walk the Qix moves by.
+const SAMPLE_SPACING: f32 = 0.05;
 
-/// Seed of the generator each game's Qix draws from.
-const QIX_SEED: u64 = 1194;
+/// Cases the coverage test samples from the strategy.
+const COVERAGE_CASES: u32 = 64;
 
-/// The whole of a [`Rng::chance`].
-const PERCENT: u64 = 100;
+/// What the cases of [`COVERAGE_CASES`] must have done at least, for the
+/// invariants to have been put to the test.
+const MIN_CLAIMS: u32 = 50;
+const MIN_CHASING_TICKS: u32 = 1;
+const MIN_LEVELS_COMPLETE: u32 = 1;
+const MIN_DEATHS_BY_EACH_CAUSE: u32 = 1;
 
-/// The game's seeded generator, with the picks the runs make.
-struct Rng(qix_core::Rng);
+/// The game a case plays: its board, its Qix and its Sparx.
+#[derive(Clone, Debug)]
+struct Setup {
+    width: u16,
+    height: u16,
+    /// The seed of the game's generator.
+    seed: u64,
+    /// The headings of the Qix, in radians: one or two of them, spread
+    /// along the middle row.
+    qix_headings: Vec<f32>,
+    /// Whether the first Sparx starts Super: the second always does, so
+    /// that one chases along the stix.
+    first_super: bool,
+}
 
-impl Rng {
-    fn next_u64(&mut self) -> u64 {
-        self.0.next_u64()
-    }
-
-    /// True with a chance of `percent` in a hundred.
-    fn chance(&mut self, percent: u64) -> bool {
-        self.next_u64() % PERCENT < percent
-    }
-
-    /// One of `items` at random, or `None` when there is none.
-    fn pick<T: Copy>(&mut self, items: &[T]) -> Option<T> {
-        let len = u64::try_from(items.len()).ok().filter(|&len| len > 0)?;
-        let index = usize::try_from(self.next_u64() % len).ok()?;
-        items.get(index).copied()
-    }
-
-    fn draw_kind(&mut self) -> DrawKind {
-        if self.chance(FAST_DRAW_PERCENT) {
-            DrawKind::Fast
+impl Setup {
+    /// A game on a fresh board, with the highest claim threshold, so the
+    /// cases claim as much as they can before the level is complete.
+    fn game(&self) -> Game {
+        let board = Board::new(self.width, self.height);
+        let qix = self.qix(&board);
+        let [first, second] = Sparx::spawn_pair(&board);
+        let first_kind = if self.first_super {
+            SparxKind::Super
         } else {
-            DrawKind::Slow
-        }
+            SparxKind::Normal
+        };
+        let sparx = vec![
+            Sparx {
+                kind: first_kind,
+                ..first
+            },
+            Sparx {
+                kind: SparxKind::Super,
+                ..second
+            },
+        ];
+        let mut game = Game::with_board(board, qix, sparx, Rng::new(self.seed));
+        game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.end()));
+        game
     }
+
+    /// The Qix, level and [`QIX_LENGTH`] long, spread evenly along the
+    /// middle row of `board`, each moving at the slowest speed.
+    fn qix(&self, board: &Board) -> Vec<Qix> {
+        let (width, height) = (f32::from(board.width()), f32::from(board.height()));
+        let slots = (self.qix_headings.len() + 1) as f32;
+        let half = Vec2::new(QIX_LENGTH * 0.5, 0.0);
+        let qix = self
+            .qix_headings
+            .iter()
+            .enumerate()
+            .map(|(slot, &heading)| {
+                let centre = Vec2::new(width * (slot + 1) as f32 / slots, height * 0.5);
+                let vel = Vec2::from_angle(heading) * *QIX_SPEED.start();
+                Qix::new(centre - half, centre + half, vel, 0.0)
+            });
+        qix.collect()
+    }
+}
+
+/// One part of an input sequence, read against the game it is played on.
+#[derive(Clone, Copy, Debug)]
+enum Action {
+    /// A step of the marker, held until it moves or dies: one of its
+    /// legal moves (see [`legal_move`]).
+    Move(Choice),
+    /// Nothing held for this many ticks.
+    Wait(u32),
+}
+
+/// What picks a marker step among its legal moves.
+#[derive(Clone, Copy, Debug)]
+struct Choice {
+    /// Picks the direction among the legal ones.
+    pick: Index,
+    /// Leave the border, when the marker can.
+    start_draw: bool,
+    /// Keep the stix's heading, when that is legal.
+    keep_heading: bool,
+    /// The draw button held for a stix step.
+    kind: DrawKind,
+}
+
+fn setup() -> impl Strategy<Value = Setup> {
+    let headings = prop::collection::vec(0.0..std::f32::consts::TAU, 1..=2);
+    (WIDTHS, HEIGHTS, any::<u64>(), headings, any::<bool>()).prop_map(
+        |(width, height, seed, qix_headings, first_super)| Setup {
+            width,
+            height,
+            seed,
+            qix_headings,
+            first_super,
+        },
+    )
+}
+
+fn draw_kind() -> impl Strategy<Value = DrawKind> {
+    prop_oneof![Just(DrawKind::Fast), Just(DrawKind::Slow)]
+}
+
+fn action() -> impl Strategy<Value = Action> {
+    let choice = (
+        any::<Index>(),
+        prop::bool::weighted(START_DRAW_CHANCE),
+        prop::bool::weighted(KEEP_HEADING_CHANCE),
+        draw_kind(),
+    )
+        .prop_map(|(pick, start_draw, keep_heading, kind)| Choice {
+            pick,
+            start_draw,
+            keep_heading,
+            kind,
+        });
+    prop_oneof![
+        MOVE_WEIGHT => choice.prop_map(Action::Move),
+        WAIT_WEIGHT => (1..=MAX_WAIT_TICKS).prop_map(Action::Wait),
+    ]
+}
+
+/// A game to play and the input sequence to play on it.
+fn case() -> impl Strategy<Value = (Setup, Vec<Action>)> {
+    (setup(), prop::collection::vec(action(), 1..=MAX_ACTIONS))
 }
 
 /// One marker step: the direction held, with the draw button, if any.
@@ -91,18 +202,103 @@ impl Move {
     }
 }
 
-/// The game just before a tick, as the invariants compare it.
-struct Before {
-    claimed: usize,
+/// The legal move `choice` picks for `game`'s marker: a step of its stix,
+/// a step off the border into free space or a step along the border; or
+/// `None` when its stix is caught in a dead end.
+fn legal_move(game: &Game, choice: Choice) -> Option<Move> {
+    let Choice {
+        pick,
+        start_draw,
+        keep_heading,
+        kind,
+    } = choice;
+    let (marker, board) = (game.marker(), game.board());
+    let draw = Some(kind);
+    if let Some(stix) = game.stix() {
+        let moves = legal_moves(&marker, stix, board);
+        let heading = match stix.points() {
+            [.., before, head] => Dir::between(*before, *head),
+            _ => None,
+        };
+        let kept = heading.filter(|dir| keep_heading && moves.contains(dir));
+        let dir = kept.or_else(|| pick_from(&moves, pick))?;
+        return Some(Move { dir, draw });
+    }
+    // The marker cannot draw during the grace period after a death.
+    let starts = match game.grace_ticks() {
+        0 => legal_moves(&marker, &Stix::new(marker.pos), board),
+        _ => Vec::new(),
+    };
+    if let Some(dir) = pick_from(&starts, pick).filter(|_| start_draw) {
+        return Some(Move { dir, draw });
+    }
+    let walks: Vec<Dir> = board
+        .border_neighbours(marker.pos)
+        .map(|(dir, _)| dir)
+        .collect();
+    let dir = pick_from(&walks, pick).expect("a border point has border edges");
+    Some(Move { dir, draw: None })
 }
 
-impl Before {
-    fn of(game: &Game) -> Self {
+/// The item of `items` that `pick` selects, or `None` when there is none.
+fn pick_from<T: Copy>(items: &[T], pick: Index) -> Option<T> {
+    (!items.is_empty()).then(|| *pick.get(items))
+}
+
+/// What the ticks of one or more cases did: enough of it shows that the
+/// invariants were put to the test.
+#[derive(Clone, Copy, Debug, Default)]
+struct Stats {
+    claims: u32,
+    /// Ticks after which a Sparx stood off the border, on the stix.
+    chasing_ticks: u32,
+    levels_complete: u32,
+    /// Deaths by the Qix, the Sparx and the fuse.
+    deaths: [u32; 3],
+}
+
+impl Stats {
+    /// Counts what the last tick of `game` did.
+    fn record(&mut self, game: &Game) {
+        for event in game.events() {
+            match event {
+                Event::Claim { .. } => self.claims += 1,
+                Event::LevelComplete { .. } => self.levels_complete += 1,
+                Event::Death(cause) => self.deaths[death_index(*cause)] += 1,
+                Event::Draw(_) | Event::ExtraLife | Event::GameOver => {}
+            }
+        }
+        let board = game.board();
+        let chasing = game.sparx().iter().any(|sparx| !board.is_border(sparx.pos));
+        self.chasing_ticks += u32::from(chasing);
+    }
+
+    fn add(self, other: Self) -> Self {
+        let mut deaths = self.deaths;
+        for (total, more) in deaths.iter_mut().zip(other.deaths) {
+            *total += more;
+        }
         Self {
-            claimed: claimed_cells(game.board()),
+            claims: self.claims + other.claims,
+            chasing_ticks: self.chasing_ticks + other.chasing_ticks,
+            levels_complete: self.levels_complete + other.levels_complete,
+            deaths,
         }
     }
 }
+
+/// The index of `cause` in [`Stats::deaths`].
+fn death_index(cause: DeathCause) -> usize {
+    match cause {
+        DeathCause::Qix => 0,
+        DeathCause::Sparx => 1,
+        DeathCause::Fuse => 2,
+    }
+}
+
+/// An invariant check, handed the number of claimed cells before the
+/// tick and the game after it.
+type Check = fn(usize, &Game) -> Result<(), TestCaseError>;
 
 /// The number of claimed cells on `board`.
 fn claimed_cells(board: &Board) -> usize {
@@ -112,181 +308,176 @@ fn claimed_cells(board: &Board) -> usize {
         .count()
 }
 
-/// A random legal move for `game`'s marker, or `None` when its stix is
-/// caught in a dead end.
-fn random_move(game: &Game, rng: &mut Rng) -> Option<Move> {
-    match game.stix() {
-        Some(stix) => stix_move(game, stix, rng),
-        None => Some(border_move(game, rng)),
-    }
+/// Ticks `game` once with `input`, then runs `check` on it.
+fn tick(
+    game: &mut Game,
+    input: &InputState,
+    check: Check,
+    stats: &mut Stats,
+) -> Result<(), TestCaseError> {
+    let claimed = claimed_cells(game.board());
+    game.tick(input);
+    stats.record(game);
+    check(claimed, game)
 }
 
-/// From the border: a step off it into free space with a draw button
-/// held, or else a step along a border edge; only the latter during the
-/// grace period after a death, when the marker cannot draw.
-fn border_move(game: &Game, rng: &mut Rng) -> Move {
-    let (marker, board) = (game.marker(), game.board());
-    let starts = match game.grace_ticks() {
-        0 => legal_moves(&marker, &Stix::new(marker.pos), board),
-        _ => Vec::new(),
-    };
-    if let Some(dir) = rng.pick(&starts).filter(|_| rng.chance(START_DRAW_PERCENT)) {
-        let draw = Some(rng.draw_kind());
-        return Move { dir, draw };
-    }
-    let walks: Vec<Dir> = board
-        .border_neighbours(marker.pos)
-        .map(|(dir, _)| dir)
-        .collect();
-    let dir = rng.pick(&walks).expect("a border point has border edges");
-    Move { dir, draw: None }
+/// Whether the last tick of `game` killed the marker.
+fn died(game: &Game) -> bool {
+    game.events()
+        .iter()
+        .any(|event| matches!(event, Event::Death(_)))
 }
 
-/// The next step of `stix`: its heading most of the time when that is
-/// legal, otherwise any legal direction.
-fn stix_move(game: &Game, stix: &Stix, rng: &mut Rng) -> Option<Move> {
-    let moves = legal_moves(&game.marker(), stix, game.board());
-    let heading = match stix.points() {
-        [.., before, head] => Dir::between(*before, *head),
-        _ => None,
-    };
-    let dir = heading
-        .filter(|dir| moves.contains(dir) && rng.chance(KEEP_HEADING_PERCENT))
-        .or_else(|| rng.pick(&moves))?;
-    let draw = Some(rng.draw_kind());
-    Some(Move { dir, draw })
-}
-
-/// Holds `step` until the marker moves or dies, calling `check` after
-/// every tick, and returns whether the step closed a stix: a draw step
-/// that ends on the border, which also holds for a stix closed by its
-/// first step.
-fn play(game: &mut Game, step: Move, check: &impl Fn(&Before, &Game)) -> bool {
+/// Holds `step` until the marker moves or dies; a legal move that does
+/// neither within the slowest step fails the case.
+fn play_move(
+    game: &mut Game,
+    step: Move,
+    check: Check,
+    stats: &mut Stats,
+) -> Result<(), TestCaseError> {
     let from = game.marker().pos;
-    let input = step.input();
     for _ in 0..SLOW_STEP_TICKS {
-        let before = Before::of(game);
-        game.tick(&input);
-        check(&before, game);
-        if game
-            .events()
-            .iter()
-            .any(|event| matches!(event, Event::Death(_)))
-        {
-            return false;
-        }
-        if game.marker().pos != from {
-            return step.draw.is_some() && game.marker().state == MarkerState::OnBorder;
+        tick(game, &step.input(), check, stats)?;
+        if died(game) || game.marker().pos != from {
+            return Ok(());
         }
     }
-    panic!("legal move {step:?} from {from:?} did not step");
+    Err(TestCaseError::fail(format!(
+        "legal move {step:?} from {from:?} did not step"
+    )))
 }
 
-/// A game on a fresh `W x H` board, with a Qix one unit long at its
-/// centre, the two Sparx of a level start, the second of them Super so
-/// that it chases along the stix, and the highest claim threshold, so the
-/// runs claim as much as they can before the level is complete.
-fn new_game() -> Game {
-    let board = Board::new(W, H);
-    let centre = Vec2::new(f32::from(W), f32::from(H)) * 0.5;
-    let half = Vec2::new(0.5, 0.0);
-    let qix = Qix::new(centre - half, centre + half, Vec2::default(), 0.0);
-    let [normal, chaser] = Sparx::spawn_pair(&board);
-    let chaser = Sparx {
-        kind: SparxKind::Super,
-        ..chaser
-    };
-    let sparx = vec![normal, chaser];
-    let mut game = Game::with_board(board, vec![qix], sparx, qix_core::Rng::new(QIX_SEED));
-    game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.end()));
-    game
-}
-
-/// Plays one game of random legal moves, until it is over or its level
-/// complete at the latest, and returns the stix it closed.
-fn play_game(rng: &mut Rng, check: &impl Fn(&Before, &Game)) -> u32 {
-    let mut game = new_game();
-    let mut closes = 0;
-    for _ in 0..MOVES_PER_GAME {
+/// Plays `actions` on the game of `setup`, running `check` after every
+/// tick, until the game is over, its level complete or its stix caught
+/// in a dead end.
+fn play_case(setup: &Setup, actions: &[Action], check: Check) -> Result<Stats, TestCaseError> {
+    let mut game = setup.game();
+    let mut stats = Stats::default();
+    for action in actions {
         if game.is_over() || game.is_level_complete() {
             break;
         }
-        let Some(step) = random_move(&game, rng) else {
-            break;
-        };
-        closes += u32::from(play(&mut game, step, check));
+        match *action {
+            Action::Move(choice) => {
+                let Some(step) = legal_move(&game, choice) else {
+                    break;
+                };
+                play_move(&mut game, step, check, &mut stats)?;
+            }
+            Action::Wait(ticks) => {
+                for _ in 0..ticks {
+                    tick(&mut game, &InputState::default(), check, &mut stats)?;
+                }
+            }
+        }
     }
-    closes
+    Ok(stats)
 }
 
-/// Plays every seeded run, calling `check` after every tick, and makes
-/// sure each run closed enough stix to have tested something.
-fn for_every_tick(check: impl Fn(&Before, &Game)) {
-    for seed in SEEDS {
-        let mut rng = Rng(qix_core::Rng::new(seed));
-        let closes: u32 = (0..GAMES_PER_RUN)
-            .map(|_| play_game(&mut rng, &check))
-            .sum();
-        assert!(
-            closes >= MIN_CLOSES_PER_RUN,
-            "seed {seed} closed only {closes} stix"
+/// Claimed cells never become free, and the claimed fraction is the
+/// claimed share of the cells.
+fn check_claims(claimed_before: usize, game: &Game) -> Result<(), TestCaseError> {
+    let board = game.board();
+    let claimed = claimed_cells(board);
+    prop_assert!(
+        claimed >= claimed_before,
+        "claimed cells {claimed_before} -> {claimed}"
+    );
+    let cells = usize::from(board.width()) * usize::from(board.height());
+    // Both sides round the same quotient of two small integers, so they
+    // are equal to the bit.
+    prop_assert_eq!(board.claimed_fraction(), claimed as f32 / cells as f32);
+    Ok(())
+}
+
+/// A stix exists exactly while the marker draws, and a marker that does
+/// not draw is on the border: no stix is left after a close.
+fn check_marker(game: &Game) -> Result<(), TestCaseError> {
+    let marker = game.marker();
+    let drawing = marker.state == MarkerState::Drawing;
+    prop_assert_eq!(game.stix().is_some(), drawing, "{:?}", marker);
+    if !drawing {
+        prop_assert!(
+            game.board().is_border(marker.pos),
+            "{:?} off the border",
+            marker
         );
     }
+    Ok(())
 }
 
-#[test]
-fn claimed_cell_count_never_decreases() {
-    for_every_tick(|before, game| {
-        let claimed = claimed_cells(game.board());
-        assert!(claimed >= before.claimed, "{} -> {claimed}", before.claimed);
-    });
-}
-
-#[test]
-fn a_stix_exists_exactly_while_drawing() {
-    // Covers every close, a stix closed by its first step included: the
-    // marker is back on the border, so no stix may remain.
-    for_every_tick(|_, game| {
-        let drawing = game.marker().state == MarkerState::Drawing;
-        assert_eq!(game.stix().is_some(), drawing, "{:?}", game.marker());
-    });
-}
-
-#[test]
-fn marker_is_on_the_border_when_not_drawing() {
-    for_every_tick(|_, game| {
-        let marker = game.marker();
-        if marker.state == MarkerState::OnBorder {
-            assert!(game.board().is_border(marker.pos), "{marker:?}");
+/// Every point sampled along each Qix, and the cell under its midpoint,
+/// is on a free cell.
+fn check_qix(game: &Game) -> Result<(), TestCaseError> {
+    let board = game.board();
+    for qix in game.qix() {
+        let (a, b) = (qix.a(), qix.b());
+        let samples = ((b - a).length() / SAMPLE_SPACING).ceil().max(1.0) as u32;
+        for i in 0..=samples {
+            let point = a + (b - a) * (i as f32 / samples as f32);
+            let cell = board.cell(point.x.floor() as i32, point.y.floor() as i32);
+            prop_assert_eq!(cell, Cell::Free, "{:?} of {:?}", point, qix);
         }
-    });
+        let (x, y) = qix.cell();
+        let mid = board.cell(i32::from(x), i32::from(y));
+        prop_assert_eq!(mid, Cell::Free, "midpoint of {:?}", qix);
+    }
+    Ok(())
+}
+
+/// Every Sparx is on the border, or chasing along the stix.
+fn check_sparx(game: &Game) -> Result<(), TestCaseError> {
+    for sparx in game.sparx() {
+        let on_border = game.board().is_border(sparx.pos);
+        let chasing = game.stix().is_some_and(|stix| sparx.chases_along(stix));
+        prop_assert!(
+            on_border || chasing,
+            "{:?} off the border and the stix",
+            sparx
+        );
+    }
+    Ok(())
+}
+
+/// Every invariant of the game after a tick.
+fn check_invariants(claimed_before: usize, game: &Game) -> Result<(), TestCaseError> {
+    check_claims(claimed_before, game)?;
+    check_marker(game)?;
+    check_qix(game)?;
+    check_sparx(game)
+}
+
+proptest! {
+    // Next to this file: an integration test has no `lib.rs` for the
+    // default persistence to find.
+    #![proptest_config(ProptestConfig {
+        failure_persistence: Some(Box::new(FileFailurePersistence::WithSource("regressions"))),
+        ..ProptestConfig::default()
+    })]
+
+    #[test]
+    fn every_tick_keeps_the_invariants((setup, actions) in case()) {
+        play_case(&setup, &actions, check_invariants)?;
+    }
 }
 
 #[test]
-fn every_sparx_is_on_the_border_or_chasing_along_the_stix() {
-    let off_the_border = Cell::new(0_u32);
-    for_every_tick(|_, game| {
-        for sparx in game.sparx() {
-            let on_border = game.board().is_border(sparx.pos);
-            let chasing = game.stix().is_some_and(|stix| sparx.chases_along(stix));
-            assert!(on_border || chasing, "{sparx:?}");
-            off_the_border.set(off_the_border.get() + u32::from(!on_border));
-        }
-    });
-    assert!(
-        off_the_border.get() > 0,
-        "no Sparx ever chased along a stix"
-    );
-}
-
-#[test]
-fn claimed_fraction_is_the_claimed_share_of_the_cells() {
-    for_every_tick(|_, game| {
-        let board = game.board();
-        let cells = usize::from(board.width()) * usize::from(board.height());
-        // Both sides round the same quotient of two small integers, so
-        // they are equal to the bit.
-        let expected = claimed_cells(board) as f32 / cells as f32;
-        assert_eq!(board.claimed_fraction(), expected);
-    });
+fn the_cases_exercise_what_the_invariants_check() {
+    let mut runner = TestRunner::deterministic();
+    let strategy = case();
+    let mut total = Stats::default();
+    for _ in 0..COVERAGE_CASES {
+        let (setup, actions) = strategy.new_tree(&mut runner).expect("a case").current();
+        let stats = play_case(&setup, &actions, |_, _| Ok(())).expect("no check to fail");
+        total = total.add(stats);
+    }
+    assert!(total.claims >= MIN_CLAIMS, "{total:?}");
+    assert!(total.chasing_ticks >= MIN_CHASING_TICKS, "{total:?}");
+    assert!(total.levels_complete >= MIN_LEVELS_COMPLETE, "{total:?}");
+    let each_cause = total
+        .deaths
+        .iter()
+        .all(|&deaths| deaths >= MIN_DEATHS_BY_EACH_CAUSE);
+    assert!(each_cause, "{total:?}");
 }

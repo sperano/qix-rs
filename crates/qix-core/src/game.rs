@@ -5,7 +5,7 @@ mod level_start;
 mod scoring;
 
 use crate::board::{Board, DrawKind};
-use crate::collision::qix_hits_player;
+use crate::collision::{qix_hits_player, qix_touches_stix};
 use crate::event::{DeathCause, Event};
 use crate::fuse::{Fuse, FuseTimer};
 use crate::geometry::{Dir, Point};
@@ -111,8 +111,9 @@ impl Game {
     /// meter counts down (see [`Game::sparx_meter`]), then the Sparx; a
     /// Qix touching the stix or the drawing marker kills the player, else
     /// a Sparx touching the marker does, else the fuse at the marker; one
-    /// death at most per tick. Once the game is over or the level
-    /// complete, a tick does nothing.
+    /// death at most per tick. A Qix touching the stix as the step onto
+    /// the border would close it kills too: nothing is claimed. Once the
+    /// game is over or the level complete, a tick does nothing.
     ///
     /// A death raises [`Event::Death`] and takes a life, and the last one
     /// [`Event::GameOver`] too: the stix and its fuse are cleared, the
@@ -133,7 +134,7 @@ impl Game {
         let grace = self.grace_ticks > 0;
         self.grace_ticks = self.grace_ticks.saturating_sub(1);
         let marker_from = self.marker.pos;
-        self.move_marker(input, grace);
+        let closed_across_qix = self.move_marker(input, grace);
         if self.level_complete {
             return;
         }
@@ -143,7 +144,7 @@ impl Game {
         }
         self.run_sparx_meter();
         let sparx_hit = self.move_sparx(marker_from) && !grace;
-        let cause = if self.qix_hits_player() {
+        let cause = if closed_across_qix || self.qix_hits_player() {
             Some(DeathCause::Qix)
         } else if sparx_hit {
             Some(DeathCause::Sparx)
@@ -368,24 +369,25 @@ impl Game {
     ///
     /// While drawing, the marker stands still on the stix as long as no
     /// draw button is held; pressing one again restarts the step count.
-    /// During the `grace` period the draw buttons are ignored.
-    fn move_marker(&mut self, input: &InputState, grace: bool) {
+    /// During the `grace` period the draw buttons are ignored. Returns
+    /// whether a stix step reached the border across a Qix (see
+    /// [`Game::draw`]).
+    fn move_marker(&mut self, input: &InputState, grace: bool) -> bool {
         let draw = input.draw_kind().filter(|_| !grace);
         let stopped = self.marker.state == MarkerState::Drawing && draw.is_none();
         let Some(dir) = input.dir.filter(|_| !stopped) else {
             self.marker_held_ticks = 0;
-            return;
+            return false;
         };
         self.marker_held_ticks += 1;
         if self.marker_held_ticks < self.step_ticks(dir, draw) {
-            return;
+            return false;
         }
         self.marker_held_ticks = 0;
         let along_border = self.marker.state == MarkerState::OnBorder
             && self.marker.step_along_border(&self.board, dir);
-        if let Some(kind) = draw.filter(|_| !along_border) {
-            self.draw(dir, kind);
-        }
+        draw.filter(|_| !along_border)
+            .is_some_and(|kind| self.draw(dir, kind))
     }
 
     /// The ticks a step towards `dir` takes with the draw button `draw`
@@ -404,43 +406,57 @@ impl Game {
     /// stix when the marker is on the border, and raises [`Event::Draw`];
     /// an illegal step leaves the marker where it is.
     ///
-    /// A step onto a border point closes the stix: the area it cuts off
-    /// from every Qix is claimed and scored, raising [`Event::Claim`] when
-    /// it claims cells, the stix is dropped and its fuse
-    /// put out, the marker is back on the border, at the closing point, and
-    /// a Sparx the claim left off the border (one that was on the stix, or
-    /// one the claim cut off) snaps back to it. A stix leaving the Qix in
-    /// different areas, or a claim taking the board to the threshold,
-    /// completes the level.
-    fn draw(&mut self, dir: Dir, kind: DrawKind) {
+    /// A step onto a border point closes the stix (see
+    /// [`Game::close`]), unless a Qix touches the stix where it is now
+    /// (see [`qix_touches_stix`]): it would lie across the closing
+    /// segment, on cells the claim takes. The stix then stays, unclosed,
+    /// and `draw` returns true: the step kills the player. Where the Qix
+    /// was a tick ago does not count: the rest of the stix was checked
+    /// against that move in the last tick, and the closing segment did not
+    /// exist then.
+    fn draw(&mut self, dir: Dir, kind: DrawKind) -> bool {
         let mut stix = self
             .stix
             .take()
             .unwrap_or_else(|| Stix::new(self.marker.pos));
         let Some(next) = legal_step(&self.marker, &stix, &self.board, dir) else {
             self.stix = (self.marker.state == MarkerState::Drawing).then_some(stix);
-            return;
+            return false;
         };
         stix.push(next, kind);
         self.marker.pos = next;
         self.events.push(Event::Draw(kind));
-        if self.board.is_border(next) {
-            let close = self.board.close_stix(&stix, &self.qix);
-            if let Some(claim) = &close.claim {
-                self.events.push(Event::Claim {
-                    cells: claim.cells,
-                    kind: claim.kind,
-                });
-                self.add_score(score_for_claim(claim, self.multiplier));
-            }
-            self.end_level_after(&close);
-            self.marker.state = MarkerState::OnBorder;
-            self.fuse.put_out();
-            self.snap_sparx_to_border();
-        } else {
-            self.marker.state = MarkerState::Drawing;
-            self.stix = Some(stix);
+        let closes = self.board.is_border(next);
+        if closes && !self.qix.iter().any(|qix| qix_touches_stix(qix, &stix)) {
+            self.close(&stix);
+            return false;
         }
+        self.marker.state = MarkerState::Drawing;
+        self.stix = Some(stix);
+        closes
+    }
+
+    /// Closes `stix`, which the marker has just drawn onto the border: the
+    /// area it cuts off from every Qix is claimed and scored, raising
+    /// [`Event::Claim`] when it claims cells, the fuse is put out, the
+    /// marker is back on the border, at the closing point, and a Sparx the
+    /// claim left off the border (one that was on the stix, or one the
+    /// claim cut off) snaps back to it. A stix leaving the Qix in different
+    /// areas, or a claim taking the board to the threshold, completes the
+    /// level.
+    fn close(&mut self, stix: &Stix) {
+        let close = self.board.close_stix(stix, &self.qix);
+        if let Some(claim) = &close.claim {
+            self.events.push(Event::Claim {
+                cells: claim.cells,
+                kind: claim.kind,
+            });
+            self.add_score(score_for_claim(claim, self.multiplier));
+        }
+        self.end_level_after(&close);
+        self.marker.state = MarkerState::OnBorder;
+        self.fuse.put_out();
+        self.snap_sparx_to_border();
     }
 }
 

@@ -1,4 +1,6 @@
-use crate::collision::{qix_hits_marker, qix_hits_player, qix_hits_stix, sweep_hits_stix};
+use crate::collision::{
+    qix_hits_marker, qix_hits_player, qix_hits_stix, qix_touches_stix, sweep_hits_stix,
+};
 use crate::tuning::{MARKER_HIT_HALF_SIZE, QIX_SPEED};
 use crate::{Board, DrawKind, Point, Qix, Rng, Stix, Vec2};
 
@@ -159,6 +161,27 @@ fn a_qix_crossing_the_stix_within_a_tick_hits_it() {
 
     assert!(qix.a().x > 2.0 && qix.b().x > 2.0, "{qix:?} did not cross");
     assert!(qix_hits_stix(&qix, &stix));
+}
+
+#[test]
+fn a_qix_that_crossed_the_stix_a_tick_ago_does_not_touch_it() {
+    let (a, b) = vertical_at(CROSSING_START_X);
+    let mut qix = Qix::new(a, b, Vec2::new(*QIX_SPEED.end(), 0.0), 0.0);
+    let stix = up_then_right();
+    assert!(!qix_touches_stix(&qix, &stix), "starts on the stix");
+
+    qix.tick(&Board::new(SWEEP_BOARD, SWEEP_BOARD), &mut Rng::new(SEED));
+
+    assert!(qix_hits_stix(&qix, &stix), "{qix:?} did not cross");
+    assert!(!qix_touches_stix(&qix, &stix));
+}
+
+#[test]
+fn a_qix_on_the_stix_touches_it() {
+    let stix = up_then_right();
+    assert!(qix_touches_stix(&qix((5.0, 3.0), (5.0, 7.0)), &stix));
+    assert!(qix_touches_stix(&qix((5.0, 2.0), (5.0, 5.0)), &stix));
+    assert!(!qix_touches_stix(&qix((3.0, 6.0), (3.0, 9.0)), &stix));
 }
 
 #[test]
