@@ -38,6 +38,8 @@ mod numbers_test;
 #[cfg(test)]
 mod persist_test;
 #[cfg(test)]
+mod playfield_perf_test;
+#[cfg(test)]
 mod playfield_test;
 #[cfg(test)]
 mod settings_menu_test;

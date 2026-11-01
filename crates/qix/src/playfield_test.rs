@@ -1,4 +1,4 @@
-use eframe::egui::{self, Pos2, Rect, Shape, Vec2, pos2, vec2};
+use eframe::egui::{self, Pos2, Rect, Shape, TextureId, Vec2, pos2, vec2};
 use qix_core::tuning::MARKER_STEP_TICKS;
 use qix_core::tuning::{BOARD_H, BOARD_W};
 use qix_core::{
@@ -23,6 +23,9 @@ const TITLE_SCORES: u32 = 3;
 
 /// Tolerance for comparing screen coordinates, in points.
 const EPSILON: f32 = 1e-3;
+
+/// The texture of the claimed cells in the painting tests.
+const CLAIMED_TEXTURE: TextureId = TextureId::User(1);
 
 /// Size of the window area the painting tests run in.
 const PAINTED_AREA: Vec2 = vec2(800.0, 600.0);
@@ -128,6 +131,7 @@ fn painted_with(game: &Game, screen: Option<&Screen>, overlay: bool) -> Vec<Shap
     let hud = hud::hud(game, 0);
     painted_scene(&Scene {
         game,
+        claimed: CLAIMED_TEXTURE,
         hud: &hud,
         claim: None,
         screen: screen.map(|screen| (screen, Placement::Centred)),
@@ -149,6 +153,7 @@ fn painted_placed(game: &Game, screen: &Screen, placement: Placement) -> Vec<Sha
     let hud = hud::hud(game, 0);
     painted_scene(&Scene {
         game,
+        claimed: CLAIMED_TEXTURE,
         hud: &hud,
         claim: None,
         screen: Some((screen, placement)),
@@ -283,6 +288,7 @@ fn the_hud_is_painted_in_its_strip() {
     let hud = hud::hud(&game, 0);
     let shapes = painted_all(&Scene {
         game: &game,
+        claimed: CLAIMED_TEXTURE,
         hud: &hud,
         claim: None,
         screen: None,
@@ -322,6 +328,7 @@ fn painted_claim(game: &Game, progress: f32) -> Vec<Shape> {
     }];
     painted_scene(&Scene {
         game,
+        claimed: CLAIMED_TEXTURE,
         hud: &hud,
         claim: Some((&runs, progress)),
         screen: None,
@@ -341,8 +348,11 @@ fn a_claim_being_animated_is_painted_over_the_cells_under_the_border() {
 
     let shapes = painted_claim(&game, 0.0);
 
-    let slow_fill = palette::fill(DrawKind::Slow);
-    let cells = first(&shapes, |s| mesh_in(s, slow_fill), "claimed cells");
+    let cells = first(
+        &shapes,
+        |s| matches!(s, Shape::Mesh(mesh) if mesh.texture_id == CLAIMED_TEXTURE),
+        "claimed cells",
+    );
     let flash = first(&shapes, |s| mesh_in(s, palette::CLAIM_FLASH), "claim");
     let border = first(
         &shapes,

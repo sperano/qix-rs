@@ -15,6 +15,7 @@ use crate::claim_fill::ClaimFill;
 use crate::input::{self, InputLatch};
 use crate::persist;
 use crate::playfield::{self, Placement, Scene};
+use crate::render::claimed::ClaimedTexture;
 use crate::render::screen::{self, Screen};
 use crate::render::{hud, settings::settings_screen};
 use crate::settings::Settings;
@@ -43,6 +44,8 @@ pub struct QixApp {
     attract: Attract,
     /// The fill animation of the last claim of the game shown.
     claim_fill: ClaimFill,
+    /// The claimed cells of the board shown, redrawn when it changes.
+    claimed: ClaimedTexture,
     /// Where the sound effects play.
     audio: Output,
     /// The sounds the session's ticks raised since the last frame played
@@ -73,6 +76,7 @@ impl QixApp {
             resize_window: true,
             attract: Attract::new(),
             claim_fill,
+            claimed: ClaimedTexture::default(),
             audio: Output::open(),
             sounds: Vec::new(),
         }
@@ -219,6 +223,13 @@ impl QixApp {
         }
     }
 
+    /// The texture of the claimed cells of the board shown, redrawn
+    /// when the board changed since the last frame.
+    fn claimed_texture(&mut self, ctx: &egui::Context) -> egui::TextureId {
+        let board = shown_game(&self.attract, &self.session).board();
+        self.claimed.texture(ctx, board)
+    }
+
     /// The screen over the playfield and where it goes: the settings
     /// while they are open, the banner of the demo while one plays, the
     /// screen of the session's state otherwise.
@@ -282,11 +293,13 @@ impl eframe::App for QixApp {
         egui::CentralPanel::default()
             .frame(playfield::panel_frame())
             .show(ui, |ui| {
+                let claimed = self.claimed_texture(ui.ctx());
                 let game = self.shown_game();
                 let hud = hud::hud(game, self.session().high_score());
                 let screen = self.screen();
                 let scene = Scene {
                     game,
+                    claimed,
                     hud: &hud,
                     claim: self.claim_fill.fresh(),
                     screen: screen

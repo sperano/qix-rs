@@ -6,12 +6,12 @@
 use std::ops::Range;
 
 use eframe::egui::{
-    Color32, Mesh, Painter, Pos2, Rect, Shape, Stroke, emath::RectTransform, pos2, vec2,
+    Color32, Painter, Pos2, Rect, Shape, Stroke, TextureId, emath::RectTransform, pos2, vec2,
 };
 use qix_core::{Board, Cell, Dir, DrawKind, Game, Point, Stix};
 
 use crate::palette;
-use crate::render::{claim_fill, sprite};
+use crate::render::{claim_fill, claimed, sprite};
 
 /// Width of the border lines, in points.
 const BORDER_WIDTH: f32 = 2.0;
@@ -40,17 +40,25 @@ impl CellRun {
     }
 }
 
-/// Paints `game`'s board through `to_screen`: the claimed cells and over
-/// them `claim`, the cells of the claim being animated and how far its
-/// animation is, if any, then the border, the stix and the marker on top.
+/// Paints `game`'s board through `to_screen`: the claimed cells from
+/// `claimed_texture`, the texture of its board's claimed cells (see
+/// [`claimed::ClaimedTexture`]), and over them `claim`, the cells of the
+/// claim being animated and how far its animation is, if any, then the
+/// border, the stix and the marker on top.
 pub fn paint(
     painter: &Painter,
     to_screen: RectTransform,
     game: &Game,
+    claimed_texture: TextureId,
     claim: Option<(&[CellRun], f32)>,
 ) {
     let board = game.board();
-    painter.add(claimed_mesh(board, to_screen));
+    claimed::paint(
+        painter,
+        to_screen,
+        claimed_texture,
+        (board.width(), board.height()),
+    );
     if let Some((runs, progress)) = claim {
         claim_fill::paint(painter, to_screen, runs, progress);
     }
@@ -153,20 +161,6 @@ pub fn marker_inner(stix: Option<&Stix>) -> Color32 {
 pub fn square_capped([from, to]: [Pos2; 2], width: f32) -> [Pos2; 2] {
     let extension = (to - from).normalized() * (width / 2.0);
     [from - extension, to + extension]
-}
-
-/// The claimed cells as one mesh of rectangles. A mesh is not
-/// anti-aliased, so the rows meet without the faint seams separate filled
-/// rectangles would leave between them.
-fn claimed_mesh(board: &Board, to_screen: RectTransform) -> Mesh {
-    let mut mesh = Mesh::default();
-    for run in claimed_runs(board) {
-        mesh.add_colored_rect(
-            to_screen.transform_rect(run.rect()),
-            palette::fill(run.kind),
-        );
-    }
-    mesh
 }
 
 /// Paints the stix, each run of segments in the colour of its kind as
