@@ -58,6 +58,11 @@ impl QixApp {
         }
     }
 
+    /// The session the app plays.
+    pub(crate) fn session(&self) -> &Session {
+        &self.session
+    }
+
     /// Puts `settings`, as the settings screen closed with them, in
     /// force: the next game plays by their rules, the window takes their
     /// size, and they are written to `storage` and flushed. Does nothing
@@ -182,11 +187,12 @@ impl eframe::App for QixApp {
         egui::CentralPanel::default()
             .frame(playfield::panel_frame())
             .show(ui, |ui| {
-                let game = self.session.game();
-                let hud = hud::hud(game, self.session.high_score());
+                let session = self.session();
+                let game = session.game();
+                let hud = hud::hud(game, session.high_score());
                 let screen = match &self.menu {
                     Some(menu) => Some(settings_screen(menu)),
-                    None => screen::screen(&self.session, &self.settings.keys),
+                    None => screen::screen(session, &self.settings.keys),
                 };
                 playfield::show(ui, game, &hud, screen.as_ref(), self.overlay);
             });

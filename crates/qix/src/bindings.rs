@@ -2,6 +2,7 @@
 
 use eframe::egui::Key;
 use qix_core::Dir;
+use serde::de::{self, Deserializer, IntoDeserializer, Visitor};
 use serde::{Deserialize, Serialize};
 
 use crate::input::RESERVED_KEYS;
@@ -80,10 +81,12 @@ const DEFAULT_KEYS: [Key; CONTROL_COUNT] = [
 ];
 
 /// A key for each [`Control`]: no two the same, none of
-/// [`RESERVED_KEYS`]. Stored as one named key per control; stored keys
-/// that break that rule load as the default bindings.
+/// [`RESERVED_KEYS`]. Stored as one named key per control; a control
+/// missing from the storage, or naming a key egui does not know, loads
+/// as its default key, and stored keys that break that rule load as the
+/// default bindings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(from = "StoredKeys", into = "StoredKeys")]
+#[serde(from = "LoadedKeys", into = "StoredKeys")]
 pub struct KeyBindings([Key; CONTROL_COUNT]);
 
 impl Default for KeyBindings {
@@ -126,7 +129,7 @@ impl KeyBindings {
 }
 
 /// [`KeyBindings`] as the storage keeps them, one named key per control.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize)]
 struct StoredKeys {
     up: Key,
     down: Key,
@@ -134,22 +137,6 @@ struct StoredKeys {
     right: Key,
     fast: Key,
     slow: Key,
-}
-
-impl From<StoredKeys> for KeyBindings {
-    /// The stored keys, or the default bindings if two are the same or
-    /// one is reserved.
-    fn from(keys: StoredKeys) -> Self {
-        let StoredKeys {
-            up,
-            down,
-            left,
-            right,
-            fast,
-            slow,
-        } = keys;
-        Self::checked([up, down, left, right, fast, slow]).unwrap_or_default()
-    }
 }
 
 impl From<KeyBindings> for StoredKeys {
@@ -163,5 +150,62 @@ impl From<KeyBindings> for StoredKeys {
             fast,
             slow,
         }
+    }
+}
+
+/// [`StoredKeys`] as they load: a control missing from the storage, or
+/// naming a key egui does not know, has none.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct LoadedKeys {
+    up: LoadedKey,
+    down: LoadedKey,
+    left: LoadedKey,
+    right: LoadedKey,
+    fast: LoadedKey,
+    slow: LoadedKey,
+}
+
+impl From<LoadedKeys> for KeyBindings {
+    /// The loaded keys, a control without one taking its default key, or
+    /// the default bindings if two are the same or one is reserved.
+    fn from(keys: LoadedKeys) -> Self {
+        let LoadedKeys {
+            up,
+            down,
+            left,
+            right,
+            fast,
+            slow,
+        } = keys;
+        let loaded = [up, down, left, right, fast, slow];
+        let keys = std::array::from_fn(|i| loaded[i].0.unwrap_or(DEFAULT_KEYS[i]));
+        Self::checked(keys).unwrap_or_default()
+    }
+}
+
+/// The key a control loads with, if its stored name is one egui knows.
+#[derive(Clone, Copy, Debug, Default)]
+struct LoadedKey(Option<Key>);
+
+impl<'de> Deserialize<'de> for LoadedKey {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_identifier(KeyName)
+    }
+}
+
+/// Reads a stored key name, as egui's [`Key`] serialises it.
+struct KeyName;
+
+impl Visitor<'_> for KeyName {
+    type Value = LoadedKey;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("the name of a key")
+    }
+
+    fn visit_str<E: de::Error>(self, name: &str) -> Result<LoadedKey, E> {
+        let key: Result<Key, E> = Key::deserialize(name.into_deserializer());
+        Ok(LoadedKey(key.ok()))
     }
 }

@@ -1,5 +1,5 @@
 use eframe::{App, Storage};
-use qix_core::HighScores;
+use qix_core::{GameState, HighScores};
 
 use crate::app::{QixApp, save_if_changed};
 use crate::persist::{HIGH_SCORES_KEY, SETTINGS_KEY, load_high_scores, load_settings};
@@ -149,4 +149,23 @@ fn unchanged_settings_are_not_written() {
 
     assert_eq!(storage.get_string(SETTINGS_KEY), None);
     assert_eq!(storage.flushes(), 0);
+}
+
+#[test]
+fn the_stored_rules_set_up_the_first_game() {
+    let app = QixApp::new(Some(&stored_settings(FIVE_LIVES)));
+
+    assert_eq!(app.session().state(), GameState::Title);
+    assert_eq!(app.session().game().lives(), 5);
+}
+
+#[test]
+fn applied_settings_set_up_the_next_game() {
+    let mut app = QixApp::new(None);
+    assert_ne!(app.session().game().lives(), 5);
+
+    app.apply_settings(load_settings(Some(&stored_settings(FIVE_LIVES))), None);
+
+    assert_eq!(app.session().state(), GameState::Title);
+    assert_eq!(app.session().game().lives(), 5);
 }

@@ -3,6 +3,9 @@ use eframe::egui::Key;
 use crate::bindings::{Control, KeyBindings};
 use crate::input::RESERVED_KEYS;
 
+/// The keys the menus need, which no control may take.
+const MENU_KEYS: [Key; 4] = [Key::Enter, Key::Escape, Key::F1, Key::F2];
+
 /// A key no default binding uses.
 const FREE_KEY: Key = Key::W;
 
@@ -69,6 +72,17 @@ fn binding_a_control_its_own_key_changes_nothing() {
 #[test]
 fn a_reserved_key_is_refused() {
     for key in RESERVED_KEYS {
+        let mut keys = KeyBindings::default();
+
+        assert!(!keys.bind(Control::Left, key), "{key:?}");
+
+        assert_eq!(keys, KeyBindings::default(), "{key:?}");
+    }
+}
+
+#[test]
+fn the_menu_keys_are_refused() {
+    for key in MENU_KEYS {
         let mut keys = KeyBindings::default();
 
         assert!(!keys.bind(Control::Left, key), "{key:?}");

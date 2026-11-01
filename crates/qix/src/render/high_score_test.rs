@@ -3,7 +3,9 @@ use qix_core::{Dir, GameState, HighScore, HighScores, Initials, InitialsEntry, I
 
 use qix_core::Session;
 
-use crate::bindings::KeyBindings;
+use eframe::egui::Key;
+
+use crate::bindings::{Control, KeyBindings};
 use crate::numbers::thousands;
 use crate::render::high_score::{high_score_entry, initials_row, table_rows};
 use crate::render::screen::{Screen, screen};
@@ -180,4 +182,35 @@ fn a_lost_game_off_the_sessions_table_says_nothing_of_a_high_score() {
     let lines = screen(&session, &KeyBindings::default()).unwrap().lines;
     assert_eq!(lines[0], format!("Final score {LOST_GAME_POINTS}"));
     assert!(!lines.contains(&NEW_HIGH_SCORE.to_owned()), "{lines:?}");
+}
+
+/// Bindings with Up on W.
+fn up_on_w() -> KeyBindings {
+    let mut keys = KeyBindings::default();
+    assert!(keys.bind(Control::Up, Key::W));
+    keys
+}
+
+#[test]
+fn the_entry_screen_names_the_bound_keys() {
+    let lines = high_score_entry(
+        &claimed_game(),
+        &HighScores::default(),
+        &InitialsEntry::new(),
+        &up_on_w(),
+    )
+    .lines;
+
+    assert_eq!(lines[2], "W/Down: change the letter");
+}
+
+#[test]
+fn a_session_entering_initials_names_the_bound_keys() {
+    let mut session = lost_game(HighScores::default());
+    session.tick(&CONFIRM);
+    assert!(matches!(session.state(), GameState::HighScoreEntry(_)));
+
+    let lines = screen(&session, &up_on_w()).unwrap().lines;
+
+    assert_eq!(lines[2], "W/Down: change the letter");
 }

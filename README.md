@@ -15,6 +15,7 @@ Sparx. Slow drawing earns more points but leaves the player exposed longer.
 | Arrow keys (initials entry) | Up/Down change the letter, Left/Right move between letters |
 | Escape | Pause or resume |
 | F1 | Toggle the debug overlay (claimed percentage, lives, tick count) |
+| F2 | On the title screen, open the settings (claim threshold, starting lives, key bindings, window scale) |
 
 ## Build and run
 

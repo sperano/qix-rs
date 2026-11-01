@@ -386,3 +386,14 @@ fn the_title_screen_names_the_bound_keys() {
     assert_eq!(lines[0], "W/Down/Left/Right: move");
     assert_eq!(lines[1], "hold Space while moving: draw fast");
 }
+
+#[test]
+fn the_title_screen_of_a_session_names_the_bound_keys() {
+    let mut keys = KeyBindings::default();
+    assert!(keys.bind(Control::Up, Key::W));
+
+    let shown = screen(&new_session(), &keys);
+
+    assert_eq!(shown, Some(title(&HighScores::default(), &keys)));
+    assert_eq!(shown.unwrap().lines[0], "W/Down/Left/Right: move");
+}

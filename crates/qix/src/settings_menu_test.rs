@@ -1,7 +1,6 @@
 use eframe::egui::Key;
 use qix_core::tuning::{
-    CLAIM_THRESHOLD_DEFAULT, CLAIM_THRESHOLD_RANGE, REPEAT_DELAY_TICKS, STARTING_LIVES,
-    STARTING_LIVES_RANGE,
+    CLAIM_THRESHOLD_RANGE, REPEAT_DELAY_TICKS, STARTING_LIVES, STARTING_LIVES_RANGE,
 };
 use qix_core::{Dir, InputState};
 
@@ -241,19 +240,28 @@ fn the_direction_held_when_a_key_is_bound_waits_for_its_release() {
 fn restore_defaults_puts_every_setting_back() {
     let mut menu = menu_at(Row::Threshold);
     press(&mut menu, Dir::Right);
-    let mut menu = SettingsMenu::new(*menu.settings());
+    press(&mut menu, Dir::Down);
+    press(&mut menu, Dir::Right);
+    press(&mut menu, Dir::Down);
+    press(&mut menu, Dir::Left);
+    while menu.selected() != Row::Key(Control::Up) {
+        press(&mut menu, Dir::Down);
+    }
+    assert_eq!(menu.tick(&CONFIRM), None);
+    assert!(menu.capture(FREE_KEY));
+    let edited = *menu.settings();
+    let defaults = Settings::default();
+    assert_ne!(edited.threshold, defaults.threshold);
+    assert_ne!(edited.starting_lives, defaults.starting_lives);
+    assert_ne!(edited.scale, defaults.scale);
+    assert_ne!(edited.keys, defaults.keys);
     while menu.selected() != Row::Defaults {
         press(&mut menu, Dir::Down);
     }
-    assert_ne!(menu.settings(), &Settings::default());
 
     assert_eq!(menu.tick(&CONFIRM), None);
 
-    assert_eq!(
-        menu.settings().threshold.fraction(),
-        CLAIM_THRESHOLD_DEFAULT
-    );
-    assert_eq!(menu.settings(), &Settings::default());
+    assert_eq!(menu.settings(), &defaults);
 }
 
 #[test]

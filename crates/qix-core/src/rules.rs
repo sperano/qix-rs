@@ -7,9 +7,10 @@ use crate::level::ClaimThreshold;
 use crate::tuning::{STARTING_LIVES, STARTING_LIVES_RANGE};
 
 /// The lives a game starts with, always in [`STARTING_LIVES_RANGE`];
-/// (de)serialised as their number, clamped on the way in.
+/// (de)serialised as their number, clamped on the way in, a negative one
+/// or one past [`u32`] included.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(from = "u32", into = "u32")]
+#[serde(from = "i64", into = "u32")]
 pub struct StartingLives(u32);
 
 impl StartingLives {
@@ -35,6 +36,15 @@ impl From<u32> for StartingLives {
     /// [`StartingLives::new`].
     fn from(lives: u32) -> Self {
         Self::new(lives)
+    }
+}
+
+impl From<i64> for StartingLives {
+    /// `lives`, clamped into [`STARTING_LIVES_RANGE`].
+    fn from(lives: i64) -> Self {
+        let (low, high) = (*STARTING_LIVES_RANGE.start(), *STARTING_LIVES_RANGE.end());
+        let clamped = lives.clamp(i64::from(low), i64::from(high));
+        Self::new(u32::try_from(clamped).unwrap_or(low))
     }
 }
 

@@ -137,12 +137,7 @@ fn without_storage_or_stored_settings_the_defaults_load() {
 
 #[test]
 fn settings_that_do_not_decode_load_as_the_defaults() {
-    for value in [
-        "",
-        "not ron",
-        "(threshold:\"high\")",
-        "(keys:(up:NoSuchKey))",
-    ] {
+    for value in ["", "not ron", "(threshold:\"high\")", "(keys:5)"] {
         assert_eq!(
             load_settings(Some(&stored(value))),
             Settings::default(),
@@ -174,6 +169,21 @@ fn stored_values_below_the_range_are_clamped() {
     assert_eq!(settings.threshold.fraction(), *CLAIM_THRESHOLD_RANGE.end());
     assert_eq!(settings.starting_lives.get(), *STARTING_LIVES_RANGE.start());
     assert_eq!(settings.scale.get(), *SCALE_RANGE.start());
+}
+
+#[test]
+fn stored_lives_outside_u32_are_clamped_and_keep_the_rest() {
+    for (lives, expected) in [
+        ("-1", *STARTING_LIVES_RANGE.start()),
+        ("4294967296", *STARTING_LIVES_RANGE.end()),
+    ] {
+        let storage = stored(&format!("(starting_lives:{lives},scale:3.0)"));
+
+        let settings = load_settings(Some(&storage));
+
+        assert_eq!(settings.starting_lives.get(), expected, "{lives}");
+        assert_eq!(settings.scale.get(), *SCALE_RANGE.end(), "{lives}");
+    }
 }
 
 #[test]
@@ -215,4 +225,28 @@ fn valid_stored_key_bindings_load() {
     for (control, key) in Control::ALL.into_iter().zip(expected) {
         assert_eq!(keys.key(control), key, "{control:?}");
     }
+}
+
+#[test]
+fn a_partial_key_table_takes_the_default_keys_and_keeps_the_rest() {
+    let storage = stored("(starting_lives:5,keys:(up:W))");
+
+    let settings = load_settings(Some(&storage));
+
+    let mut expected = KeyBindings::default();
+    assert!(expected.bind(Control::Up, Key::W));
+    assert_eq!(settings.keys, expected);
+    assert_eq!(settings.starting_lives.get(), 5);
+}
+
+#[test]
+fn an_unknown_key_name_takes_the_default_key_and_keeps_the_rest() {
+    let storage = stored("(starting_lives:5,keys:(up:NoSuchKey,fast:J))");
+
+    let settings = load_settings(Some(&storage));
+
+    let mut expected = KeyBindings::default();
+    assert!(expected.bind(Control::Fast, Key::J));
+    assert_eq!(settings.keys, expected);
+    assert_eq!(settings.starting_lives.get(), 5);
 }

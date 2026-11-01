@@ -28,7 +28,21 @@ fn starting_lives_convert_through_their_number_clamped() {
         u32::from(StartingLives::from(STARTING_LIVES)),
         STARTING_LIVES
     );
-    assert_eq!(StartingLives::from(0), StartingLives::new(0));
+    assert_eq!(StartingLives::from(0_u32), StartingLives::new(0));
+}
+
+#[test]
+fn starting_lives_from_a_wider_number_are_clamped() {
+    let (fewest, most) = (*STARTING_LIVES_RANGE.start(), *STARTING_LIVES_RANGE.end());
+
+    assert_eq!(StartingLives::from(-1_i64).get(), fewest);
+    assert_eq!(StartingLives::from(i64::MIN).get(), fewest);
+    assert_eq!(
+        StartingLives::from(i64::from(STARTING_LIVES)).get(),
+        STARTING_LIVES
+    );
+    assert_eq!(StartingLives::from(i64::from(u32::MAX) + 1).get(), most);
+    assert_eq!(StartingLives::from(i64::MAX).get(), most);
 }
 
 #[test]
