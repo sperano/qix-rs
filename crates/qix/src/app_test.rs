@@ -41,11 +41,12 @@ fn an_unchanged_table_is_not_written() {
     save_if_changed(Some(&mut storage), &mut saved, &table);
 
     assert_eq!(storage.get_string(HIGH_SCORES_KEY), None);
+    assert_eq!(storage.flushes(), 0);
     assert_eq!(saved, table);
 }
 
 #[test]
-fn a_changed_table_is_written_and_recorded_as_saved() {
+fn a_changed_table_is_written_flushed_and_recorded_as_saved() {
     let table = HighScores::from(vec![entry("QIX", 500)]);
     let mut saved = HighScores::default();
     let mut storage = MemoryStorage::default();
@@ -56,6 +57,8 @@ fn a_changed_table_is_written_and_recorded_as_saved() {
         storage.get_string(HIGH_SCORES_KEY).as_deref(),
         Some(ONE_ENTRY)
     );
+    assert_eq!(storage.flushes(), 1);
+    assert_eq!(storage.flushed_string(HIGH_SCORES_KEY), Some(ONE_ENTRY));
     assert_eq!(saved, table);
 }
 

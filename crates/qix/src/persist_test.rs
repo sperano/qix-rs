@@ -9,24 +9,44 @@ use crate::persist::{HIGH_SCORES_KEY, load_high_scores, save_high_scores};
 /// Points between two entries of [`full_table`].
 const SCORE_STEP: u32 = 1500;
 
-/// A [`Storage`] in memory.
+/// A [`Storage`] in memory that records its flushes.
 #[derive(Default)]
-pub(crate) struct MemoryStorage(HashMap<String, String>);
+pub(crate) struct MemoryStorage {
+    values: HashMap<String, String>,
+    /// The values as of the last flush.
+    flushed: HashMap<String, String>,
+    flushes: usize,
+}
+
+impl MemoryStorage {
+    /// The value under `key` as of the last flush.
+    pub(crate) fn flushed_string(&self, key: &str) -> Option<&str> {
+        self.flushed.get(key).map(String::as_str)
+    }
+
+    /// How many times the storage was flushed.
+    pub(crate) fn flushes(&self) -> usize {
+        self.flushes
+    }
+}
 
 impl Storage for MemoryStorage {
     fn get_string(&self, key: &str) -> Option<String> {
-        self.0.get(key).cloned()
+        self.values.get(key).cloned()
     }
 
     fn set_string(&mut self, key: &str, value: String) {
-        self.0.insert(key.to_owned(), value);
+        self.values.insert(key.to_owned(), value);
     }
 
     fn remove_string(&mut self, key: &str) {
-        self.0.remove(key);
+        self.values.remove(key);
     }
 
-    fn flush(&mut self) {}
+    fn flush(&mut self) {
+        self.flushed.clone_from(&self.values);
+        self.flushes += 1;
+    }
 }
 
 pub(crate) fn entry(name: &str, score: u32) -> HighScore {
