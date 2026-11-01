@@ -4,10 +4,11 @@
 //! attract-mode demo, and keeps the high score table and the settings in
 //! eframe's storage.
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use eframe::{Storage, egui};
 use qix_core::{Attract, Demo, Game, GameState, HighScores, InputState, Rng, Session};
+// `std::time::SystemTime` panics on the web; `web_time` reads the browser
+// clock there and re-exports `std::time` elsewhere.
+use web_time::{SystemTime, UNIX_EPOCH};
 
 use crate::audio::Output;
 use crate::claim_fill::ClaimFill;
