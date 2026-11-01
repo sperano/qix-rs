@@ -2,6 +2,9 @@ name: Release
 
 # Pushing a `v*` tag creates its GitHub release and attaches the desktop
 # binaries (Linux, macOS, Windows) and the web build to it.
+#
+# Only the steps that call `gh` get the write token: the build steps run
+# the build scripts and proc macros of every dependency.
 on:
   push:
     tags: ["v*"]
@@ -11,7 +14,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  GH_TOKEN: ${{ github.token }}
   TAG: ${{ github.ref_name }}
 
 jobs:
@@ -20,6 +22,8 @@ jobs:
     steps:
       # A re-run keeps the release created by the first run.
       - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 ||
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
@@ -44,6 +48,8 @@ jobs:
       TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Install eframe and audio build dependencies
         if: runner.os == 'Linux'
@@ -65,6 +71,8 @@ jobs:
 
       - name: Package and upload
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           name="qix-$TAG-$TARGET"
           mkdir "$name"
@@ -85,6 +93,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -100,6 +110,8 @@ jobs:
         run: trunk build --release --locked
 
       - name: Package and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           name="qix-$TAG-web"
           mv crates/qix/dist "$name"
