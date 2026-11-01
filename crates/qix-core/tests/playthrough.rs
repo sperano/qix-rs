@@ -10,7 +10,8 @@
 
 use qix_core::tuning::{
     BOARD_H, BOARD_W, BONUS_PER_PERCENT, CLAIM_THRESHOLD_DEFAULT, EXTRA_LIFE_EVERY, FIRST_LEVEL,
-    MARKER_STEP_TICKS, POINTS_PER_CELL, STARTING_LIVES,
+    FUSE_DELAY_TICKS, FUSE_STEP_TICKS, MARKER_STEP_TICKS, POINTS_PER_CELL, RESPAWN_GRACE_TICKS,
+    STARTING_LIVES,
 };
 use qix_core::{
     DeathCause, DemoStep, Dir, DrawKind, Event, Game, GameState, HighScore, Initials, InputState,
@@ -43,12 +44,12 @@ const INTO_QIX_STEPS: u32 = BOARD_H as u32 / 2;
 /// burns along.
 const FUSE_STIX_STEPS: u32 = 4;
 
-/// Ticks the marker stands still on its stix: more than the fuse needs
-/// to be lit and to reach it.
-const STAND_TICKS: u32 = 60;
+/// Ticks the marker stands still on its stix: as many as the fuse needs
+/// to be lit and to burn along the stix to the marker.
+const STAND_TICKS: u32 = FUSE_DELAY_TICKS + FUSE_STIX_STEPS * FUSE_STEP_TICKS;
 
 /// Ticks of the grace period after a death that the script sits out.
-const GRACE_WAIT_TICKS: u32 = 120;
+const GRACE_WAIT_TICKS: u32 = RESPAWN_GRACE_TICKS;
 
 /// Ticks the marker waits on the border for the Sparx to take every
 /// life left: far more than they need.
@@ -116,13 +117,17 @@ const LEVEL_ONE: &[DemoStep] = &[
     fast(Dir::Left, RIGHT_LINE_X - LEFT_LINE_X),
 ];
 
-/// From the end of the first level, the second, until the game is over:
-/// a short stix the marker stops on, a stix into the Qix, then a wait on
-/// the border.
-const LEVEL_TWO: &[DemoStep] = &[
+/// From the end of the first level, the start of the second until the
+/// fuse kills: a short stix the marker stops on.
+const LEVEL_TWO_FUSE: &[DemoStep] = &[
     CONFIRM,
     fast(Dir::Up, FUSE_STIX_STEPS),
     DemoStep::idle(STAND_TICKS),
+];
+
+/// The rest of the second level, until the game is over: the grace
+/// period, a stix into the Qix, then a wait on the border.
+const LEVEL_TWO_REST: &[DemoStep] = &[
     DemoStep::idle(GRACE_WAIT_TICKS),
     fast(Dir::Up, INTO_QIX_STEPS),
     DemoStep::idle(WAIT_FOR_SPARX_TICKS),
@@ -151,6 +156,11 @@ fn play(session: &mut Session, script: &[DemoStep]) -> Vec<Event> {
         }
     }
     events
+}
+
+/// The whole second level: [`LEVEL_TWO_FUSE`], then [`LEVEL_TWO_REST`].
+fn level_two() -> Vec<DemoStep> {
+    [LEVEL_TWO_FUSE, LEVEL_TWO_REST].concat()
 }
 
 /// The cells of the claims among `events`.
@@ -219,7 +229,7 @@ fn the_second_level_loses_every_life_and_scores_nothing() {
     let mut session = new_session();
     play(&mut session, LEVEL_ONE);
     let lives = session.game().lives();
-    let events = play(&mut session, LEVEL_TWO);
+    let events = play(&mut session, &level_two());
     assert_eq!(deaths(&events), LEVEL_TWO_DEATHS);
     assert_eq!(LEVEL_TWO_DEATHS.len(), lives as usize);
     assert_eq!(claims(&events), []);
@@ -232,10 +242,19 @@ fn the_second_level_loses_every_life_and_scores_nothing() {
 }
 
 #[test]
+fn the_fuse_reaches_the_marker_while_it_stands() {
+    let mut session = new_session();
+    play(&mut session, LEVEL_ONE);
+    let events = play(&mut session, LEVEL_TWO_FUSE);
+    assert_eq!(deaths(&events), [DeathCause::Fuse]);
+    assert_eq!(events.last(), Some(&Event::Death(DeathCause::Fuse)));
+}
+
+#[test]
 fn the_final_score_enters_the_high_score_table() {
     let mut session = new_session();
     play(&mut session, LEVEL_ONE);
-    play(&mut session, LEVEL_TWO);
+    play(&mut session, &level_two());
     play(&mut session, ENTER_INITIALS);
     assert_eq!(session.state(), GameState::Title);
     let entry = HighScore {
@@ -252,7 +271,7 @@ fn the_final_score_enters_the_high_score_table() {
 
 #[test]
 fn the_same_script_plays_the_same_game_twice() {
-    let whole = [LEVEL_ONE, LEVEL_TWO].concat();
+    let whole = [LEVEL_ONE, &level_two()].concat();
     let mut first = new_session();
     let mut second = new_session();
     assert_eq!(play(&mut first, &whole), play(&mut second, &whole));

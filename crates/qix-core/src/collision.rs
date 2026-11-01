@@ -20,6 +20,13 @@ pub fn qix_hits_stix(qix: &Qix, stix: &Stix) -> bool {
     sweep_hits_stix(qix.previous(), (qix.a(), qix.b()), stix)
 }
 
+/// The Qix's segment, where it is now, touches one of `stix`'s segments:
+/// unlike [`qix_hits_stix`], where it was a tick ago does not count.
+pub fn qix_touches_stix(qix: &Qix, stix: &Stix) -> bool {
+    let now = (qix.a(), qix.b());
+    sweep_hits_stix(now, now, stix)
+}
+
 /// The area a segment sweeps moving from `before` to `after` meets one of
 /// `stix`'s segments. The area is taken as the convex hull of the two
 /// segments' four ends, which holds every segment in between, even one

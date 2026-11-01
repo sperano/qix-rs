@@ -1,7 +1,7 @@
 //! The Qix killing the player through [`Game::tick`].
 
 use super::{SEED, drawing};
-use crate::collision::qix_hits_marker;
+use crate::collision::{qix_hits_marker, sweep_hits_stix};
 use crate::tuning::MARKER_STEP_TICKS;
 use crate::{
     Board, Cell, DeathCause, Dir, DrawKind, Event, Game, InputState, Point, Qix, Rng, Sparx, Stix,
@@ -55,6 +55,25 @@ const CLOSING_STEPS: u32 = 3;
 /// below the channel.
 const CHANNEL_MARGIN: f32 = 0.1;
 const CHANNEL_DEPTH: f32 = 0.25;
+
+/// The free cells of [`passing_the_closing_line`]: a corridor one row
+/// high, above a column two cells wide down to the marker's start, which
+/// the stix up the column's middle reaches the corridor's top edge in.
+const CORRIDOR: (std::ops::Range<u16>, u16) = (2..W - 2, H - 4);
+const CORRIDOR_COLUMN: std::ops::Range<u16> = W / 2 - 1..W / 2 + 1;
+
+/// Steps of the stix up from the marker's start to the corridor's top
+/// edge.
+const CORRIDOR_STEPS: u32 = 4;
+
+/// Where the midpoint of [`passing_the_closing_line`]'s Qix starts, its
+/// length and the speed it starts at to the right: a Qix shorter than it
+/// moves in a tick, high enough in the corridor to stay clear of the
+/// marker's square.
+const PASSING_START: (f32, f32) = (PASSING_X, 0.2);
+const PASSING_X: f32 = 5.25;
+const PASSING_LENGTH: f32 = 0.4;
+const PASSING_SPEED: f32 = 0.8;
 
 /// A `W x H` board with only the cells `free` keeps free.
 fn board_with(free: impl Fn(u16, u16) -> bool) -> Board {
@@ -119,6 +138,21 @@ fn closing_through_a_qix() -> Game {
     let a = Vec2::new(f32::from(channel_x.start) + CHANNEL_MARGIN, y);
     let b = Vec2::new(f32::from(channel_x.end) - CHANNEL_MARGIN, y);
     let qix = Qix::new(a, b, Vec2::default(), 0.0);
+    Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED))
+}
+
+/// A corridor across the board, over a column down to the marker's
+/// start, with a short level Qix in the corridor heading right: it
+/// crosses the marker's column in the tick before the stix up that column
+/// reaches the corridor's top edge.
+fn passing_the_closing_line() -> Game {
+    let ((corridor_x, corridor_y), column) = (CORRIDOR, CORRIDOR_COLUMN);
+    let board = board_with(|x, y| {
+        (corridor_x.contains(&x) && y == corridor_y) || (column.contains(&x) && y > corridor_y)
+    });
+    let mid = Vec2::new(PASSING_START.0, f32::from(corridor_y) + PASSING_START.1);
+    let half = Vec2::new(PASSING_LENGTH * 0.5, 0.0);
+    let qix = Qix::new(mid - half, mid + half, Vec2::new(PASSING_SPEED, 0.0), 0.0);
     Game::with_board(board, vec![qix], Vec::new(), Rng::new(SEED))
 }
 
@@ -257,4 +291,39 @@ fn a_stix_closing_across_a_qix_kills_instead_of_claiming() {
         game.qix()[0].a().y,
         f32::from(CLOSING_CHANNEL.1) + CHANNEL_DEPTH
     );
+}
+
+#[test]
+fn a_qix_past_the_closing_line_does_not_stop_the_claim() {
+    let mut game = passing_the_closing_line();
+    let board = game.board().clone();
+    let up = drawing(Dir::Up, DrawKind::Fast);
+    let before_close = CORRIDOR_STEPS * MARKER_STEP_TICKS - 1;
+    assert_eq!(deaths(&mut game, up, before_close), []);
+    let (corridor_x, corridor_y) = CORRIDOR;
+    let top = Point::new(W / 2, corridor_y);
+    let mut closing = Stix::new(Point::new(top.x, top.y + 1));
+    closing.push(top, DrawKind::Fast);
+    let qix = &game.qix()[0];
+    let now = (qix.a(), qix.b());
+    assert!(
+        sweep_hits_stix(qix.previous(), now, &closing),
+        "the Qix did not cross the closing line in the last tick"
+    );
+    assert!(!sweep_hits_stix(now, now, &closing), "the Qix is on it");
+
+    let raised = deaths(&mut game, up, 1);
+
+    assert_eq!(raised, []);
+    assert_eq!(game.stix(), None);
+    assert!(
+        (game.events().iter()).any(|event| matches!(event, Event::Claim { .. })),
+        "the stix claimed nothing"
+    );
+    assert!(
+        game.board()
+            .cell(corridor_x.start.into(), corridor_y.into())
+            .is_claimed()
+    );
+    assert_ne!(game.board(), &board);
 }

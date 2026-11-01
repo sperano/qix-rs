@@ -5,7 +5,7 @@ mod level_start;
 mod scoring;
 
 use crate::board::{Board, DrawKind};
-use crate::collision::{qix_hits_player, qix_hits_stix};
+use crate::collision::{qix_hits_player, qix_touches_stix};
 use crate::event::{DeathCause, Event};
 use crate::fuse::{Fuse, FuseTimer};
 use crate::geometry::{Dir, Point};
@@ -407,10 +407,13 @@ impl Game {
     /// an illegal step leaves the marker where it is.
     ///
     /// A step onto a border point closes the stix (see
-    /// [`Game::close`]), unless a Qix touches the stix (see
-    /// [`qix_hits_stix`]): it would lie across the closing segment, on
-    /// cells the claim takes. The stix then stays, unclosed, and `draw`
-    /// returns true: the step kills the player.
+    /// [`Game::close`]), unless a Qix touches the stix where it is now
+    /// (see [`qix_touches_stix`]): it would lie across the closing
+    /// segment, on cells the claim takes. The stix then stays, unclosed,
+    /// and `draw` returns true: the step kills the player. Where the Qix
+    /// was a tick ago does not count: the rest of the stix was checked
+    /// against that move in the last tick, and the closing segment did not
+    /// exist then.
     fn draw(&mut self, dir: Dir, kind: DrawKind) -> bool {
         let mut stix = self
             .stix
@@ -424,7 +427,7 @@ impl Game {
         self.marker.pos = next;
         self.events.push(Event::Draw(kind));
         let closes = self.board.is_border(next);
-        if closes && !self.qix.iter().any(|qix| qix_hits_stix(qix, &stix)) {
+        if closes && !self.qix.iter().any(|qix| qix_touches_stix(qix, &stix)) {
             self.close(&stix);
             return false;
         }
