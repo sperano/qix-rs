@@ -7,25 +7,40 @@ use qix_core::{DrawKind, MeterExpiry, SparxKind};
 pub const WINDOW_BACKGROUND: Color32 = Color32::BLACK;
 
 /// The free area of the playfield.
-pub const PLAYFIELD_BACKGROUND: Color32 = Color32::from_rgb(16, 16, 40);
+pub const PLAYFIELD_BACKGROUND: Color32 = Color32::from_rgb(6, 6, 20);
 
 /// The border the marker and the Sparx travel.
 pub const BORDER: Color32 = Color32::WHITE;
 
 /// Cells claimed by a fast draw.
-pub const FAST_FILL: Color32 = Color32::from_rgb(40, 90, 200);
+pub const FAST_FILL: Color32 = Color32::from_rgb(20, 55, 165);
 
 /// Cells claimed by a slow draw.
-pub const SLOW_FILL: Color32 = Color32::from_rgb(190, 70, 40);
+pub const SLOW_FILL: Color32 = Color32::from_rgb(145, 40, 30);
 
 /// Segments of the stix drawn fast.
-pub const FAST_STIX: Color32 = Color32::from_rgb(130, 180, 255);
+pub const FAST_STIX: Color32 = Color32::from_rgb(90, 160, 255);
 
 /// Segments of the stix drawn slow.
-pub const SLOW_STIX: Color32 = Color32::from_rgb(255, 140, 100);
+pub const SLOW_STIX: Color32 = Color32::from_rgb(255, 115, 75);
 
-/// The player's marker.
+/// The bright colour the stix being drawn flickers to, from the colour of
+/// its kind.
+pub const STIX_FLICKER: Color32 = Color32::from_rgb(255, 250, 225);
+
+/// The bright colour newly claimed cells start from, before they settle
+/// to the fill of their kind.
+pub const CLAIM_FLASH: Color32 = Color32::from_rgb(235, 245, 255);
+
+/// The inside of the player's marker.
 pub const MARKER: Color32 = Color32::from_rgb(255, 220, 60);
+
+/// The outline of the marker's sprite: dark enough to stand out from the
+/// white border and the claimed cells alike.
+pub const MARKER_OUTLINE: Color32 = Color32::from_rgb(140, 70, 0);
+
+/// The highlight on the marker's sprite.
+pub const MARKER_HIGHLIGHT: Color32 = Color32::from_rgb(255, 255, 200);
 
 /// The colours the Qix's trail cycles through, one per segment.
 pub const QIX_TRAIL: [Color32; 8] = [
@@ -44,6 +59,12 @@ pub const SPARX: Color32 = Color32::from_rgb(255, 90, 90);
 
 /// A Super Sparx.
 pub const SUPER_SPARX: Color32 = Color32::from_rgb(90, 255, 140);
+
+/// The bright heart of a Sparx's sprite.
+pub const SPARX_CORE: Color32 = Color32::from_rgb(255, 235, 210);
+
+/// The bright heart of a Super Sparx's sprite.
+pub const SUPER_SPARX_CORE: Color32 = Color32::from_rgb(225, 255, 235);
 
 /// The fuse's burning point.
 pub const FUSE: Color32 = Color32::from_rgb(255, 255, 230);
@@ -113,5 +134,13 @@ pub const fn sparx(kind: SparxKind) -> Color32 {
     match kind {
         SparxKind::Normal => SPARX,
         SparxKind::Super => SUPER_SPARX,
+    }
+}
+
+/// The colour of the heart of a Sparx of `kind`.
+pub const fn sparx_core(kind: SparxKind) -> Color32 {
+    match kind {
+        SparxKind::Normal => SPARX_CORE,
+        SparxKind::Super => SUPER_SPARX_CORE,
     }
 }

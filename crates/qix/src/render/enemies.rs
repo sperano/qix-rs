@@ -4,32 +4,17 @@
 //! window size; positions go through [`paint`]'s transform like the
 //! board's.
 
-use std::f32::consts::FRAC_PI_4;
-
-use eframe::egui::{Color32, Painter, Pos2, Shape, Stroke, emath::RectTransform, pos2, vec2};
-use qix_core::{Game, Qix, Sparx, Vec2};
+use eframe::egui::{Color32, Painter, Pos2, Shape, Stroke, emath::RectTransform, pos2};
+use qix_core::{Game, Qix, Sparx};
 
 use crate::palette;
 use crate::render::board::screen;
+use crate::render::sprite::{self, Mask, SPARK_FRAMES};
 
 /// Width of each segment of the Qix's trail, in points.
 const QIX_WIDTH: f32 = 1.5;
 
-/// Half the length of a spark's long rays, in points.
-const SPARK_LONG_RAY: f32 = 5.0;
-
-/// Half the length of a spark's short rays, in points.
-const SPARK_SHORT_RAY: f32 = 2.5;
-
-/// Width of a spark's rays, in points.
-const SPARK_WIDTH: f32 = 1.5;
-
-/// The rays through a spark's centre: horizontal, diagonal, vertical and
-/// the other diagonal, every other one long.
-pub const SPARK_RAYS: usize = 4;
-
-/// Ticks between two flickers of a spark, when its long and short rays
-/// swap.
+/// Ticks between two flickers of a spark, when its two frames swap.
 pub const SPARK_FLICKER_TICKS: u64 = 4;
 
 /// Radius of the fuse's bright dot, in points.
@@ -79,20 +64,11 @@ pub fn trail_colours(len: usize, ticks: u64) -> impl Iterator<Item = Color32> {
     })
 }
 
-/// The ends of a spark's rays, each through `center`; which rays are long
-/// alternates every [`SPARK_FLICKER_TICKS`].
-pub fn spark_rays(center: Pos2, ticks: u64) -> [[Pos2; 2]; SPARK_RAYS] {
-    let flicker = usize::from(!(ticks / SPARK_FLICKER_TICKS).is_multiple_of(2));
-    std::array::from_fn(|ray| {
-        let half = if (ray + flicker) % 2 == 0 {
-            SPARK_LONG_RAY
-        } else {
-            SPARK_SHORT_RAY
-        };
-        let dir = Vec2::from_angle(ray as f32 * FRAC_PI_4);
-        let offset = vec2(dir.x, dir.y) * half;
-        [center - offset, center + offset]
-    })
+/// The frame of a spark after `ticks` ticks: it swaps between
+/// [`SPARK_FRAMES`] every [`SPARK_FLICKER_TICKS`].
+pub fn spark_frame(ticks: u64) -> Mask {
+    let frame = usize::from(!(ticks / SPARK_FLICKER_TICKS).is_multiple_of(2));
+    SPARK_FRAMES[frame]
 }
 
 /// The fuse at `center`: the rings of its glow, outermost first, then its
@@ -120,9 +96,8 @@ fn paint_qix(painter: &Painter, to_screen: RectTransform, qix: &Qix, ticks: u64)
     }));
 }
 
-/// Paints a spark on `sparx`'s lattice point, in the colour of its kind.
+/// Paints a spark on `sparx`'s lattice point, in the colours of its kind.
 fn paint_sparx(painter: &Painter, to_screen: RectTransform, sparx: &Sparx, ticks: u64) {
-    let stroke = Stroke::new(SPARK_WIDTH, palette::sparx(sparx.kind));
-    let rays = spark_rays(screen(to_screen, sparx.pos), ticks);
-    painter.extend(rays.map(|ends| Shape::line_segment(ends, stroke)));
+    let centre = screen(to_screen, sparx.pos);
+    painter.add(sprite::spark(spark_frame(ticks), centre, sparx.kind));
 }

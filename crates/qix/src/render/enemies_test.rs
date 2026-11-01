@@ -1,6 +1,4 @@
-use std::f32::consts::FRAC_1_SQRT_2;
-
-use eframe::egui::{self, Color32, Pos2, Rect, Shape, Vec2, emath::RectTransform, pos2, vec2};
+use eframe::egui::{self, Color32, Mesh, Pos2, Rect, Shape, Vec2, emath::RectTransform, pos2};
 use qix_core::tuning::{
     BOARD_H, BOARD_W, FUSE_DELAY_TICKS, FUSE_STEP_TICKS, MARKER_STEP_TICKS, QIX_TRAIL_LEN,
     TWO_QIX_FROM_LEVEL,
@@ -9,9 +7,10 @@ use qix_core::{Board, Dir, Game, InputState, Point, Qix, Rng, Sparx, SparxKind};
 
 use crate::palette;
 use crate::render::enemies::{
-    FUSE_GLOW_RINGS, FUSE_RADIUS, SPARK_FLICKER_TICKS, SPARK_RAYS, fuse_shapes, paint, spark_rays,
+    FUSE_GLOW_RINGS, FUSE_RADIUS, SPARK_FLICKER_TICKS, fuse_shapes, paint, spark_frame,
     trail_colours,
 };
+use crate::render::sprite::{self, SPARK_FRAMES};
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1;
@@ -65,48 +64,17 @@ fn a_trail_longer_than_the_ticks_still_cycles_backwards() {
     );
 }
 
-fn half_lengths(rays: [[Pos2; 2]; SPARK_RAYS]) -> Vec<f32> {
-    rays.iter().map(|[a, b]| a.distance(*b) / 2.0).collect()
+#[test]
+fn a_spark_starts_on_its_first_frame() {
+    assert_eq!(spark_frame(0), SPARK_FRAMES[0]);
 }
 
 #[test]
-fn every_ray_of_a_spark_crosses_its_centre() {
-    for [a, b] in spark_rays(CENTER, 0) {
-        assert!(a.lerp(b, 0.5).distance(CENTER) < EPSILON, "{a:?} {b:?}");
-    }
-}
-
-#[test]
-fn every_other_ray_of_a_spark_is_long() {
-    let lengths = half_lengths(spark_rays(CENTER, 0));
-    assert!(lengths[0] > lengths[1], "{lengths:?}");
-    assert_eq!(lengths[0], lengths[2]);
-    assert_eq!(lengths[1], lengths[3]);
-}
-
-#[test]
-fn the_rays_of_a_spark_are_horizontal_diagonal_vertical_and_antidiagonal() {
-    let expected = [
-        vec2(1.0, 0.0),
-        vec2(FRAC_1_SQRT_2, FRAC_1_SQRT_2),
-        vec2(0.0, 1.0),
-        vec2(-FRAC_1_SQRT_2, FRAC_1_SQRT_2),
-    ];
-    for ([a, b], expected) in spark_rays(CENTER, 0).into_iter().zip(expected) {
-        let dir = (b - a).normalized();
-        assert!((dir - expected).length() < EPSILON, "{dir:?} {expected:?}");
-    }
-}
-
-#[test]
-fn a_spark_flickers_by_swapping_its_long_and_short_rays() {
-    let still = spark_rays(CENTER, SPARK_FLICKER_TICKS - 1);
-    assert_eq!(still, spark_rays(CENTER, 0));
-    let mut swapped = half_lengths(spark_rays(CENTER, SPARK_FLICKER_TICKS));
-    swapped.rotate_left(1);
-    for (swapped, still) in swapped.iter().zip(half_lengths(still)) {
-        assert!((swapped - still).abs() < EPSILON, "{swapped} {still}");
-    }
+fn a_spark_flickers_to_its_other_frame_and_back_every_flicker_period() {
+    assert_eq!(spark_frame(SPARK_FLICKER_TICKS - 1), SPARK_FRAMES[0]);
+    assert_eq!(spark_frame(SPARK_FLICKER_TICKS), SPARK_FRAMES[1]);
+    assert_eq!(spark_frame(2 * SPARK_FLICKER_TICKS - 1), SPARK_FRAMES[1]);
+    assert_eq!(spark_frame(2 * SPARK_FLICKER_TICKS), SPARK_FRAMES[0]);
 }
 
 fn circle(shape: &Shape) -> Option<(Pos2, f32, Color32)> {
@@ -269,44 +237,85 @@ fn every_qix_of_a_two_qix_level_is_painted() {
     }
 }
 
-#[test]
-fn each_sparx_is_a_spark_in_the_colour_of_its_kind() {
-    let at = |x, kind| Sparx {
+/// The vertices of the meshes among `shapes`, one list per mesh, in
+/// painting order.
+fn meshes(shapes: &[Shape]) -> Vec<&Mesh> {
+    shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Mesh(mesh) => Some(&**mesh),
+            _ => None,
+        })
+        .collect()
+}
+
+fn sparx_at(x: u16, kind: SparxKind) -> Sparx {
+    Sparx {
         pos: Point::new(x, 0),
         dir: Dir::Right,
         kind,
-    };
+    }
+}
+
+fn colours_of(mesh: &Mesh) -> Vec<Color32> {
+    let mut colours: Vec<_> = mesh.vertices.iter().map(|v| v.color).collect();
+    colours.sort_by_key(|c| c.to_array());
+    colours.dedup();
+    colours
+}
+
+#[test]
+fn each_sparx_is_a_spark_in_the_colours_of_its_kind() {
     let game = game_with(vec![
-        at(10, SparxKind::Normal),
-        at(50, SparxKind::Normal),
-        at(100, SparxKind::Super),
+        sparx_at(10, SparxKind::Normal),
+        sparx_at(50, SparxKind::Normal),
+        sparx_at(100, SparxKind::Super),
     ]);
     let shapes = painted(&game);
-    assert_eq!(segments_in(&shapes, palette::SPARX), 2 * SPARK_RAYS);
-    assert_eq!(segments_in(&shapes, palette::SUPER_SPARX), SPARK_RAYS);
+    let sparks = meshes(&shapes);
+    assert_eq!(sparks.len(), 3);
+    let colours_of_kind = |body: Color32, core: Color32| {
+        let mut colours = vec![body, core];
+        colours.sort_by_key(|c| c.to_array());
+        colours
+    };
+    let normal = colours_of_kind(palette::SPARX, palette::SPARX_CORE);
+    let super_sparx = colours_of_kind(palette::SUPER_SPARX, palette::SUPER_SPARX_CORE);
+    assert_eq!(colours_of(sparks[0]), normal);
+    assert_eq!(colours_of(sparks[1]), normal);
+    assert_eq!(colours_of(sparks[2]), super_sparx);
 }
 
 #[test]
 fn each_spark_is_centred_on_its_sparx() {
     let xs = [10, 50, 100];
-    let sparx = xs.map(|x| Sparx {
-        pos: Point::new(x, 0),
-        dir: Dir::Right,
-        kind: SparxKind::Normal,
-    });
+    let sparx = xs.map(|x| sparx_at(x, SparxKind::Normal));
     let shapes = painted(&game_with(sparx.to_vec()));
-    let rays: Vec<_> = lines(&shapes)
-        .into_iter()
-        .filter(|&(_, colour)| colour == palette::SPARX)
-        .map(|(ends, _)| ends)
-        .collect();
-    assert_eq!(rays.len(), xs.len() * SPARK_RAYS);
-    for (spark, x) in rays.chunks(SPARK_RAYS).zip(xs) {
+    let sparks = meshes(&shapes);
+    assert_eq!(sparks.len(), xs.len());
+    for (spark, x) in sparks.into_iter().zip(xs) {
+        let bounds = Rect::from_points(&spark.vertices.iter().map(|v| v.pos).collect::<Vec<_>>());
         let at = on_screen(f32::from(x), 0.0);
-        for [a, b] in spark {
-            assert!(a.lerp(*b, 0.5).distance(at) < EPSILON, "{a:?} {b:?}");
-        }
+        assert!(bounds.center().distance(at) < EPSILON, "{bounds:?} {at:?}");
     }
+}
+
+#[test]
+fn a_painted_spark_flickers_with_the_game_ticks() {
+    let mut game = game_with(vec![sparx_at(10, SparxKind::Normal)]);
+    // The Sparx walks on, so the expected spark follows its position.
+    let frame_painted = |game: &Game| {
+        let at = on_screen(f32::from(game.sparx()[0].pos.x), 0.0);
+        let shapes = painted(game);
+        let painted = meshes(&shapes)[0].clone();
+        SPARK_FRAMES
+            .into_iter()
+            .position(|frame| painted == sprite::spark(frame, at, SparxKind::Normal))
+    };
+    assert_eq!(frame_painted(&game), Some(0));
+    idle(&mut game, SPARK_FLICKER_TICKS as usize);
+    assert_eq!(game.ticks(), SPARK_FLICKER_TICKS);
+    assert_eq!(frame_painted(&game), Some(1));
 }
 
 fn drawing(dir: Dir) -> InputState {

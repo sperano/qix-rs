@@ -1,11 +1,22 @@
 use std::ops::Range;
 
-use eframe::egui::{Rect, pos2};
-use qix_core::{Board, Cell, DrawKind, Point, Stix};
+use eframe::egui::{self, Color32, Pos2, Rect, Shape, emath::RectTransform, pos2};
+use eframe::epaint::ColorMode;
+use qix_core::tuning::{BOARD_H, BOARD_W};
+use qix_core::{Board, Cell, Dir, DrawKind, Game, InputState, Point, Rng, Stix};
 
+use crate::palette;
 use crate::render::board::{
-    CellRun, border_segments, claimed_runs, diamond, square_capped, stix_runs,
+    CellRun, STIX_FLICKER_TICKS, border_segments, claimed_runs, marker_inner, paint, square_capped,
+    stix_colour, stix_runs,
 };
+use crate::render::sprite;
+
+/// Seed of every game the tests play.
+const SEED: u64 = 1;
+
+/// Tolerance for comparing screen coordinates, in points.
+const EPSILON: f32 = 1e-3;
 
 /// Dimensions of the small board the tests use.
 const W: u16 = 6;
@@ -153,14 +164,151 @@ fn a_change_of_kind_starts_a_polyline_at_the_last_point() {
 }
 
 #[test]
-fn the_diamond_has_its_corners_on_the_axes_clockwise_from_the_top() {
+fn a_stix_starts_in_the_colour_of_its_kind() {
+    assert_eq!(stix_colour(DrawKind::Fast, 0), palette::FAST_STIX);
+    assert_eq!(stix_colour(DrawKind::Slow, 0), palette::SLOW_STIX);
+}
+
+#[test]
+fn a_stix_flickers_to_the_bright_colour_and_back_every_flicker_period() {
+    let kind = DrawKind::Fast;
+    let last_still = STIX_FLICKER_TICKS - 1;
+    assert_eq!(stix_colour(kind, last_still), palette::FAST_STIX);
+    assert_eq!(stix_colour(kind, STIX_FLICKER_TICKS), palette::STIX_FLICKER);
     assert_eq!(
-        diamond(pos2(10.0, 20.0), 3.0),
-        [
-            pos2(10.0, 17.0),
-            pos2(13.0, 20.0),
-            pos2(10.0, 23.0),
-            pos2(7.0, 20.0),
-        ]
+        stix_colour(kind, 2 * STIX_FLICKER_TICKS - 1),
+        palette::STIX_FLICKER
     );
+    assert_eq!(
+        stix_colour(kind, 2 * STIX_FLICKER_TICKS),
+        palette::FAST_STIX
+    );
+}
+
+#[test]
+fn the_flicker_period_is_the_same_for_both_kinds() {
+    for ticks in 0..4 * STIX_FLICKER_TICKS {
+        let flickering = |kind| stix_colour(kind, ticks) == palette::STIX_FLICKER;
+        assert_eq!(
+            flickering(DrawKind::Fast),
+            flickering(DrawKind::Slow),
+            "{ticks}"
+        );
+    }
+}
+
+#[test]
+fn the_marker_is_plain_until_the_stix_has_a_segment() {
+    assert_eq!(marker_inner(None), palette::MARKER);
+    assert_eq!(
+        marker_inner(Some(&Stix::new(Point::new(2, H)))),
+        palette::MARKER
+    );
+}
+
+#[test]
+fn the_marker_takes_the_colour_of_the_kind_of_the_last_segment() {
+    let mut stix = Stix::new(Point::new(2, H));
+    stix.push(Point::new(2, 2), DrawKind::Fast);
+    assert_eq!(marker_inner(Some(&stix)), palette::FAST_STIX);
+    stix.push(Point::new(4, 2), DrawKind::Slow);
+    assert_eq!(marker_inner(Some(&stix)), palette::SLOW_STIX);
+}
+
+/// Screen points per playfield unit in [`painted`].
+const SCALE: f32 = 5.0;
+
+/// Runs one headless egui frame painting `game`'s board at [`SCALE`]
+/// points per unit and returns the shapes.
+fn painted(game: &Game) -> Vec<Shape> {
+    let units = Rect::from_min_max(Pos2::ZERO, pos2(f32::from(BOARD_W), f32::from(BOARD_H)));
+    let to_screen =
+        RectTransform::from_to(units, Rect::from_min_size(Pos2::ZERO, units.size() * SCALE));
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(*to_screen.to()),
+        ..egui::RawInput::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| paint(ui.painter(), to_screen, game, None));
+    // No renderer uploads the font atlas here; dropping it unapplied panics.
+    output.textures_delta.clear();
+    output
+        .shapes
+        .into_iter()
+        .map(|clipped| clipped.shape)
+        .collect()
+}
+
+#[test]
+fn the_marker_is_painted_last_as_a_sprite_centred_on_its_position() {
+    let game = Game::new(Rng::new(SEED));
+    let shapes = painted(&game);
+    let Some(Shape::Mesh(mesh)) = shapes.last() else {
+        panic!("{shapes:?}");
+    };
+    let at = pos2(
+        f32::from(game.marker().pos.x),
+        f32::from(game.marker().pos.y),
+    ) * SCALE;
+    let points: Vec<_> = mesh.vertices.iter().map(|v| v.pos).collect();
+    let centre = Rect::from_points(&points).center();
+    assert!(centre.distance(at) < EPSILON, "{centre:?} {at:?}");
+    assert_eq!(**mesh, sprite::marker(at, sprite::PIXEL, palette::MARKER));
+}
+
+/// A game whose marker has drawn a fast stix of one segment, at rest on
+/// its first stix point.
+fn drawing_game(extra_ticks: u64) -> Game {
+    let mut game = Game::new(Rng::new(SEED));
+    let up = InputState {
+        dir: Some(Dir::Up),
+        fast: true,
+        ..InputState::default()
+    };
+    while game.stix().is_none() {
+        game.tick(&up);
+    }
+    for _ in 0..extra_ticks {
+        game.tick(&InputState::default());
+    }
+    game
+}
+
+/// The colours of the stix polylines among `shapes`.
+fn stix_colours(shapes: &[Shape]) -> Vec<Color32> {
+    shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Path(path) if !path.closed => match path.stroke.color {
+                ColorMode::Solid(colour) => Some(colour),
+                ColorMode::UV(_) => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_painted_stix_flickers_with_the_game_ticks() {
+    let still = drawing_game(0);
+    let expected = |game: &Game| vec![stix_colour(DrawKind::Fast, game.ticks())];
+    assert_eq!(stix_colours(&painted(&still)), expected(&still));
+    let flickered = drawing_game(STIX_FLICKER_TICKS);
+    assert_ne!(
+        stix_colour(DrawKind::Fast, still.ticks()),
+        stix_colour(DrawKind::Fast, flickered.ticks())
+    );
+    assert_eq!(stix_colours(&painted(&flickered)), expected(&flickered));
+}
+
+#[test]
+fn the_marker_takes_the_stix_colour_while_drawing() {
+    let game = drawing_game(0);
+    let shapes = painted(&game);
+    let Some(Shape::Mesh(mesh)) = shapes.last() else {
+        panic!("{shapes:?}");
+    };
+    let colours: Vec<_> = mesh.vertices.iter().map(|v| v.color).collect();
+    assert!(colours.contains(&palette::FAST_STIX));
+    assert!(!colours.contains(&palette::MARKER));
 }

@@ -7,9 +7,12 @@ use qix_core::{
 
 use crate::bindings::KeyBindings;
 use crate::palette;
-use crate::playfield::{hud_units, letterbox, playfield_units, show, to_screen, window_units};
-use crate::render::hud::{self, Hud};
-use crate::render::screen::{Screen, paused, title};
+use crate::playfield::{
+    Placement, Scene, hud_units, letterbox, playfield_units, show, to_screen, window_units,
+};
+use crate::render::board::CellRun;
+use crate::render::hud;
+use crate::render::screen::{self, Screen, paused, title};
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1;
@@ -120,23 +123,48 @@ fn painted(game: &Game, overlay: bool) -> Vec<Shape> {
     painted_with(game, None, overlay)
 }
 
-/// [`painted`] with `screen` over the playfield.
+/// [`painted`] with `screen` centred over the playfield.
 fn painted_with(game: &Game, screen: Option<&Screen>, overlay: bool) -> Vec<Shape> {
+    let hud = hud::hud(game, 0);
+    painted_scene(&Scene {
+        game,
+        hud: &hud,
+        claim: None,
+        screen: screen.map(|screen| (screen, Placement::Centred)),
+        overlay,
+    })
+}
+
+/// The shapes of one headless egui frame showing `scene`, outside the
+/// HUD, after checking that they tessellate.
+fn painted_scene(scene: &Scene) -> Vec<Shape> {
     let strip = hud_strip();
-    let shapes = painted_all(game, &hud::hud(game, 0), screen, overlay);
+    let shapes = painted_all(scene);
     let in_hud = |shape: &Shape| strip.contains_rect(shape.visual_bounding_rect());
     shapes.into_iter().filter(|shape| !in_hud(shape)).collect()
 }
 
-/// Every shape of one headless egui frame showing `game`'s playfield with
-/// `hud` and `screen`, after checking that they tessellate.
-fn painted_all(game: &Game, hud: &Hud, screen: Option<&Screen>, overlay: bool) -> Vec<Shape> {
+/// [`painted_scene`] of `game` with `screen` placed as `placement`.
+fn painted_placed(game: &Game, screen: &Screen, placement: Placement) -> Vec<Shape> {
+    let hud = hud::hud(game, 0);
+    painted_scene(&Scene {
+        game,
+        hud: &hud,
+        claim: None,
+        screen: Some((screen, placement)),
+        overlay: false,
+    })
+}
+
+/// Every shape of one headless egui frame showing `scene`, after
+/// checking that they tessellate.
+fn painted_all(scene: &Scene) -> Vec<Shape> {
     let ctx = egui::Context::default();
     let input = egui::RawInput {
         screen_rect: Some(area(PAINTED_AREA)),
         ..egui::RawInput::default()
     };
-    let mut output = ctx.run_ui(input, |ui| show(ui, game, hud, screen, overlay));
+    let mut output = ctx.run_ui(input, |ui| show(ui, scene));
     // No renderer uploads the font atlas here; dropping it unapplied panics.
     output.textures_delta.clear();
     let shapes = output.shapes.iter().map(|clipped| clipped.shape.clone());
@@ -164,11 +192,9 @@ fn the_playfield_paints_the_claimed_cells_border_and_marker() {
         &shapes,
         |s| matches!(s, Shape::LineSegment { stroke, .. } if stroke.color == palette::BORDER),
     );
-    let polygons = count(&shapes, |s| matches!(s, Shape::Path(p) if p.closed));
-    assert_eq!(meshes, 1, "{shapes:?}");
+    assert_eq!(meshes, 2, "the claimed cells and the marker: {shapes:?}");
     // The four sides, cut short by the claimed corner, and its two edges.
     assert_eq!(segments, 6, "{shapes:?}");
-    assert_eq!(polygons, 1, "the marker: {shapes:?}");
     assert_eq!(count(&shapes, |s| matches!(s, Shape::Text(_))), 0);
 }
 
@@ -260,10 +286,77 @@ fn a_stix_being_drawn_is_painted_as_a_line() {
 fn the_hud_is_painted_in_its_strip() {
     let game = Game::new(Rng::new(SEED));
     let strip = hud_strip();
-    let shapes = painted_all(&game, &hud::hud(&game, 0), None, false);
+    let hud = hud::hud(&game, 0);
+    let shapes = painted_all(&Scene {
+        game: &game,
+        hud: &hud,
+        claim: None,
+        screen: None,
+        overlay: false,
+    });
     let in_hud = |shape: &&Shape| strip.contains_rect(shape.visual_bounding_rect());
     let in_hud: Vec<_> = shapes.iter().filter(in_hud).cloned().collect();
     let texts = texts(&in_hud);
     assert!(texts.contains(&"SCORE".to_owned()), "{texts:?}");
     assert!(texts.contains(&"0.0% / 75%".to_owned()), "{texts:?}");
+}
+
+/// Whether `shape` is a mesh with a vertex of `colour`.
+fn mesh_in(shape: &Shape, colour: egui::Color32) -> bool {
+    matches!(shape, Shape::Mesh(mesh) if mesh.vertices.iter().any(|v| v.color == colour))
+}
+
+#[test]
+fn a_claim_being_animated_is_painted_over_the_cells_under_the_marker() {
+    let game = Game::new(Rng::new(SEED));
+    let hud = hud::hud(&game, 0);
+    let runs = [CellRun {
+        row: 0,
+        cols: 0..BOARD_W,
+        kind: DrawKind::Fast,
+    }];
+    let shapes = painted_scene(&Scene {
+        game: &game,
+        hud: &hud,
+        claim: Some((&runs, 0.0)),
+        screen: None,
+        overlay: false,
+    });
+    let flash = shapes
+        .iter()
+        .position(|shape| mesh_in(shape, palette::CLAIM_FLASH));
+    let marker = shapes
+        .iter()
+        .position(|shape| mesh_in(shape, palette::MARKER_OUTLINE));
+    let flash = flash.expect("the claim is painted");
+    assert!(flash < marker.expect("the marker is painted"));
+    assert_eq!(painted(&game, false).len() + 1, shapes.len());
+}
+
+/// Whether `shape` is the dimming of the playfield under a screen.
+fn is_dim(shape: &Shape) -> bool {
+    matches!(shape, Shape::Rect(rect) if rect.fill == palette::SCREEN_DIM)
+}
+
+#[test]
+fn a_centred_screen_dims_the_playfield() {
+    let shapes = painted_placed(&Game::new(Rng::new(SEED)), &paused(), Placement::Centred);
+    assert_eq!(count(&shapes, is_dim), 1);
+}
+
+#[test]
+fn a_banner_leaves_the_playfield_undimmed_and_sits_at_its_top() {
+    let banner = screen::demo();
+    let shapes = painted_placed(&Game::new(Rng::new(SEED)), &banner, Placement::Banner);
+    assert_eq!(count(&shapes, is_dim), 0);
+    assert_eq!(texts(&shapes).len(), 1 + banner.lines.len());
+    let field = to_screen(area(PAINTED_AREA)).transform_rect(playfield_units());
+    for shape in shapes.iter().filter(|s| matches!(s, Shape::Text(_))) {
+        let bounds = shape.visual_bounding_rect();
+        assert!(field.contains_rect(bounds), "{bounds:?} off {field:?}");
+        assert!(
+            bounds.max.y < field.center().y,
+            "{bounds:?} below the middle"
+        );
+    }
 }

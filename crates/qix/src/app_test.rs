@@ -1,5 +1,6 @@
 use eframe::{App, Storage};
-use qix_core::{GameState, HighScores};
+use qix_core::tuning::ATTRACT_DELAY_TICKS;
+use qix_core::{DEMO_SCRIPT, GameState, HighScores, InputState};
 
 use crate::app::{QixApp, save_if_changed};
 use crate::persist::{HIGH_SCORES_KEY, SETTINGS_KEY, load_high_scores, load_settings};
@@ -168,4 +169,97 @@ fn applied_settings_set_up_the_next_game() {
 
     assert_eq!(app.session().state(), GameState::Title);
     assert_eq!(app.session().game().lives(), 5);
+}
+
+/// One tick of input with confirm pressed.
+const CONFIRM: InputState = InputState {
+    dir: None,
+    fast: false,
+    slow: false,
+    confirm: true,
+    pause: false,
+};
+
+/// Runs `ticks` ticks of `app` with no control held.
+fn idle(app: &mut QixApp, ticks: u32) {
+    for _ in 0..ticks {
+        app.tick(&InputState::default());
+    }
+}
+
+#[test]
+fn an_idle_title_shows_the_demo_after_the_attract_delay() {
+    let mut app = QixApp::new(None);
+    idle(&mut app, ATTRACT_DELAY_TICKS - 1);
+    assert!(app.attract().demo().is_none());
+    assert!(std::ptr::eq(app.shown_game(), app.session().game()));
+
+    idle(&mut app, 2);
+
+    let demo = app.attract().demo().expect("the demo plays");
+    assert!(std::ptr::eq(app.shown_game(), demo.game()));
+    assert_eq!(app.shown_game().ticks(), 1);
+    assert_eq!(app.session().state(), GameState::Title);
+}
+
+#[test]
+fn confirm_during_the_demo_stops_it_and_starts_a_game() {
+    let mut app = QixApp::new(None);
+    idle(&mut app, ATTRACT_DELAY_TICKS);
+    assert!(app.attract().demo().is_some());
+
+    app.tick(&CONFIRM);
+
+    assert!(app.attract().demo().is_none());
+    assert_eq!(app.session().state(), GameState::Playing);
+    assert!(std::ptr::eq(app.shown_game(), app.session().game()));
+}
+
+#[test]
+fn no_demo_plays_once_a_game_is_on() {
+    let mut app = QixApp::new(None);
+    app.tick(&CONFIRM);
+    app.tick(&InputState {
+        pause: true,
+        ..InputState::default()
+    });
+    assert_eq!(app.session().state(), GameState::Paused);
+
+    idle(&mut app, 2 * ATTRACT_DELAY_TICKS);
+
+    assert!(app.attract().demo().is_none());
+}
+
+#[test]
+fn the_demo_ends_back_on_the_title() {
+    let mut app = QixApp::new(None);
+    let script: u32 = DEMO_SCRIPT.iter().map(|step| step.ticks).sum();
+    idle(&mut app, ATTRACT_DELAY_TICKS + script - 1);
+    assert!(app.attract().demo().is_some());
+
+    idle(&mut app, 1);
+
+    assert!(app.attract().demo().is_none());
+    assert_eq!(app.session().state(), GameState::Title);
+    assert_eq!(app.claim_fill().fresh(), None);
+}
+
+#[test]
+fn a_claim_of_the_demo_starts_the_fill_animation() {
+    let mut app = QixApp::new(None);
+    idle(&mut app, ATTRACT_DELAY_TICKS);
+    let claimed = |app: &QixApp| app.shown_game().board().claimed_fraction() > 0.0;
+    let script: u32 = DEMO_SCRIPT.iter().map(|step| step.ticks).sum();
+    for _ in 0..script {
+        if claimed(&app) {
+            break;
+        }
+        assert_eq!(app.claim_fill().fresh(), None);
+        idle(&mut app, 1);
+    }
+    assert!(claimed(&app), "the demo claims nothing");
+
+    let (runs, progress) = app.claim_fill().fresh().expect("the claim animates");
+    assert!(!runs.is_empty());
+    assert_eq!(progress, 0.0);
 }
