@@ -7,6 +7,7 @@ use qix_core::tuning::{BOARD_H, BOARD_W};
 
 use crate::palette;
 use crate::render;
+use crate::render::board::CellRun;
 use crate::render::hud::{self, Hud};
 use crate::render::screen::Screen;
 
@@ -58,21 +59,49 @@ pub fn to_screen(available: Rect) -> RectTransform {
     RectTransform::from_to(window_units(), letterbox(available))
 }
 
-/// Fills `ui` with the playfield: its background, `game`'s board and its
-/// enemies, then `hud` above the playfield, `screen` over the playfield,
-/// if any, and the debug overlay on top when `overlay` is set.
-pub fn show(ui: &mut egui::Ui, game: &Game, hud: &Hud, screen: Option<&Screen>, overlay: bool) {
+/// Where a screen is painted over the playfield.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Placement {
+    /// Centred on the playfield, which it dims.
+    Centred,
+    /// At the top of the playfield, which plays on undimmed under it.
+    Banner,
+}
+
+/// Everything one frame paints in the window.
+#[derive(Clone, Copy, Debug)]
+pub struct Scene<'a> {
+    /// The game whose board and enemies are painted.
+    pub game: &'a Game,
+    /// The HUD above the playfield.
+    pub hud: &'a Hud,
+    /// The cells of the claim being animated, and how far its animation
+    /// is, from 0 to 1.
+    pub claim: Option<(&'a [CellRun], f32)>,
+    /// The screen over the playfield, if any, and where it goes.
+    pub screen: Option<(&'a Screen, Placement)>,
+    /// The debug overlay is shown, on top of everything.
+    pub overlay: bool,
+}
+
+/// Fills `ui` with `scene`: the playfield's background, the game's board
+/// with the claim being animated and the enemies, then the HUD above
+/// the playfield, the screen over it, if any, and the debug overlay on
+/// top.
+pub fn show(ui: &mut egui::Ui, scene: &Scene) {
     let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::hover());
     let to_screen = to_screen(response.rect);
     let field = to_screen.transform_rect(playfield_units());
     painter.rect_filled(field, 0.0, palette::PLAYFIELD_BACKGROUND);
-    render::board::paint(&painter, to_screen, game);
-    render::enemies::paint(&painter, to_screen, game);
-    hud::paint(&painter, to_screen.transform_rect(hud_units()), hud);
-    if let Some(screen) = screen {
-        render::screen::paint(&painter, field, screen);
+    render::board::paint(&painter, to_screen, scene.game, scene.claim);
+    render::enemies::paint(&painter, to_screen, scene.game);
+    hud::paint(&painter, to_screen.transform_rect(hud_units()), scene.hud);
+    match scene.screen {
+        Some((screen, Placement::Centred)) => render::screen::paint(&painter, field, screen),
+        Some((screen, Placement::Banner)) => render::screen::paint_banner(&painter, field, screen),
+        None => {}
     }
-    if overlay {
-        render::overlay::paint(&painter, field, game);
+    if scene.overlay {
+        render::overlay::paint(&painter, field, scene.game);
     }
 }

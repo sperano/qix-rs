@@ -1,17 +1,19 @@
 //! The eframe application: samples input, runs the core ticks each frame
 //! owes, paints the playfield with the HUD and the screen of the
-//! session's state or the settings, and keeps the high score table and
-//! the settings in eframe's storage.
+//! session's state, the settings or the attract-mode demo, and keeps the
+//! high score table and the settings in eframe's storage.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use eframe::{Storage, egui};
-use qix_core::{Game, GameState, HighScores, Rng, Session};
+use qix_core::{Attract, Demo, Game, GameState, HighScores, InputState, Rng, Session};
 
+use crate::claim_fill::ClaimFill;
 use crate::input::{self, InputLatch};
 use crate::persist;
-use crate::playfield;
-use crate::render::{hud, screen, settings::settings_screen};
+use crate::playfield::{self, Placement, Scene};
+use crate::render::screen::{self, Screen};
+use crate::render::{hud, settings::settings_screen};
 use crate::settings::Settings;
 use crate::settings_menu::SettingsMenu;
 use crate::timestep::FixedTimestep;
@@ -33,6 +35,10 @@ pub struct QixApp {
     /// The window is to take the size of the settings' scale on the next
     /// frame.
     resize_window: bool,
+    /// The demo the title screen plays once left idle.
+    attract: Attract,
+    /// The fill animation of the last claim of the game shown.
+    claim_fill: ClaimFill,
 }
 
 impl QixApp {
@@ -46,6 +52,7 @@ impl QixApp {
         let mut session =
             Session::with_high_scores(Game::new(Rng::new(clock_seed())), high_scores.clone());
         session.set_rules(settings.rules());
+        let claim_fill = ClaimFill::new(session.game().board());
         Self {
             session,
             timestep: FixedTimestep::default(),
@@ -55,12 +62,32 @@ impl QixApp {
             settings,
             menu: None,
             resize_window: true,
+            attract: Attract::new(),
+            claim_fill,
         }
     }
 
     /// The session the app plays.
     pub(crate) fn session(&self) -> &Session {
         &self.session
+    }
+
+    /// The attract-mode demo of the title screen.
+    #[cfg(test)]
+    pub(crate) fn attract(&self) -> &Attract {
+        &self.attract
+    }
+
+    /// The fill animation of the last claim of the game shown.
+    #[cfg(test)]
+    pub(crate) fn claim_fill(&self) -> &ClaimFill {
+        &self.claim_fill
+    }
+
+    /// The game painted on the playfield: the demo's while one plays, the
+    /// session's otherwise.
+    pub(crate) fn shown_game(&self) -> &Game {
+        shown_game(&self.attract, &self.session)
     }
 
     /// Puts `settings`, as the settings screen closed with them, in
@@ -79,6 +106,12 @@ impl QixApp {
             storage.flush();
         }
     }
+}
+
+/// The game painted on the playfield: `attract`'s demo while one plays,
+/// `session`'s otherwise.
+fn shown_game<'a>(attract: &'a Attract, session: &'a Session) -> &'a Game {
+    attract.demo().map_or(session.game(), Demo::game)
 }
 
 /// The nanoseconds since the Unix epoch, truncated to their low 64 bits;
@@ -116,27 +149,61 @@ impl QixApp {
             Some(_) => {}
             None if settings_opened && self.session.state() == GameState::Title => {
                 self.menu = Some(SettingsMenu::new(self.settings));
+                self.attract.reset();
             }
             None => {}
         }
         self.input.record(sample);
-        (0..self.timestep.advance(dt)).find_map(|_| self.tick())
+        (0..self.timestep.advance(dt)).find_map(|_| {
+            let tick_input = self.input.next_tick();
+            self.tick(&tick_input)
+        })
     }
 
-    /// Runs one tick of the settings screen while it is open, of the
-    /// session otherwise; returns the settings the screen closed with,
-    /// if it did.
-    fn tick(&mut self) -> Option<Settings> {
-        let tick_input = self.input.next_tick();
-        let Some(menu) = &mut self.menu else {
-            self.session.tick(&tick_input);
-            return None;
+    /// Runs one tick with `input`: of the settings screen while it is
+    /// open, of the session otherwise, with the attract mode while it is
+    /// on the title screen; then of the claim animation of the game shown.
+    /// Returns the settings the screen closed with, if it did.
+    pub(crate) fn tick(&mut self, input: &InputState) -> Option<Settings> {
+        let closed = match &mut self.menu {
+            Some(menu) => menu.tick(input),
+            None => {
+                self.tick_session(input);
+                None
+            }
         };
-        let closed = menu.tick(&tick_input);
         if closed.is_some() {
             self.menu = None;
         }
+        let shown = shown_game(&self.attract, &self.session);
+        self.claim_fill.tick(shown.board());
         closed
+    }
+
+    /// Ticks the session with `input`, and the attract mode before it on
+    /// the title screen: an input that stops the demo also reaches the
+    /// title, so confirm starts a game. Off the title, no demo plays.
+    fn tick_session(&mut self, input: &InputState) {
+        if self.session.state() == GameState::Title {
+            self.attract.tick(input);
+        } else {
+            self.attract.reset();
+        }
+        self.session.tick(input);
+    }
+
+    /// The screen over the playfield and where it goes: the settings
+    /// while they are open, the banner of the demo while one plays, the
+    /// screen of the session's state otherwise.
+    fn screen(&self) -> Option<(Screen, Placement)> {
+        if let Some(menu) = &self.menu {
+            return Some((settings_screen(menu), Placement::Centred));
+        }
+        if self.attract.demo().is_some() {
+            return Some((screen::demo(), Placement::Banner));
+        }
+        screen::screen(&self.session, &self.settings.keys)
+            .map(|screen| (screen, Placement::Centred))
     }
 
     /// Writes the high score table to `frame`'s storage and flushes it as
@@ -187,14 +254,19 @@ impl eframe::App for QixApp {
         egui::CentralPanel::default()
             .frame(playfield::panel_frame())
             .show(ui, |ui| {
-                let session = self.session();
-                let game = session.game();
-                let hud = hud::hud(game, session.high_score());
-                let screen = match &self.menu {
-                    Some(menu) => Some(settings_screen(menu)),
-                    None => screen::screen(session, &self.settings.keys),
+                let game = self.shown_game();
+                let hud = hud::hud(game, self.session().high_score());
+                let screen = self.screen();
+                let scene = Scene {
+                    game,
+                    hud: &hud,
+                    claim: self.claim_fill.fresh(),
+                    screen: screen
+                        .as_ref()
+                        .map(|(screen, placement)| (screen, *placement)),
+                    overlay: self.overlay,
                 };
-                playfield::show(ui, game, &hud, screen.as_ref(), self.overlay);
+                playfield::show(ui, &scene);
             });
         // The game moves on its own, so every frame is followed by another.
         ui.ctx().request_repaint();

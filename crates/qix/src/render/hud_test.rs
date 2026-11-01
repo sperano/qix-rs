@@ -148,11 +148,12 @@ fn column_of(shapes: &[Shape], strip: Rect, text: &str) -> Option<usize> {
         .position(|column| column.expand(EPSILON).contains_rect(bounds))
 }
 
-fn polygons(shapes: &[Shape]) -> usize {
-    let closed = shapes
+/// The life markers among `shapes`: its sprite meshes.
+fn markers(shapes: &[Shape]) -> usize {
+    shapes
         .iter()
-        .filter(|s| matches!(s, Shape::Path(p) if p.closed));
-    closed.count()
+        .filter(|s| matches!(s, Shape::Mesh(_)))
+        .count()
 }
 
 /// The rectangles of `shapes` filled with `color`.
@@ -301,7 +302,7 @@ fn each_value_is_painted_in_its_own_column() {
 fn each_life_is_a_marker() {
     let hud = hud(&Game::new(Rng::new(SEED)), 0);
     let shapes = painted(&hud, default_strip());
-    assert_eq!(polygons(&shapes), STARTING_LIVES as usize);
+    assert_eq!(markers(&shapes), STARTING_LIVES as usize);
 }
 
 #[test]
@@ -310,7 +311,7 @@ fn as_many_markers_as_lives_up_to_the_most_shown() {
     for lives in 0..=MAX_LIFE_MARKERS {
         hud.lives = lives;
         let shapes = painted(&hud, default_strip());
-        assert_eq!(polygons(&shapes), lives as usize);
+        assert_eq!(markers(&shapes), lives as usize);
     }
 }
 
@@ -318,7 +319,7 @@ fn as_many_markers_as_lives_up_to_the_most_shown() {
 fn more_lives_show_as_one_marker_and_their_count() {
     let hud = widest_hud();
     let shapes = painted(&hud, default_strip());
-    assert_eq!(polygons(&shapes), 1);
+    assert_eq!(markers(&shapes), 1);
     let count = format!("x{}", hud.lives);
     assert!(texts(&shapes).contains(&count), "{count}");
 }

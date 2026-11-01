@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use eframe::egui::{FontId, Galley, Painter, Rect, pos2, vec2};
+use eframe::egui::{FontId, Galley, Painter, Rect, Vec2, pos2, vec2};
 use qix_core::tuning::SLOW_DRAW_FACTOR;
 use qix_core::{Game, GameState, HighScores, Session};
 
@@ -28,6 +28,10 @@ const TABLE_GAP: f32 = 16.0;
 
 /// Space between a screen's text and the edge of its panel, in points.
 const PADDING: f32 = 24.0;
+
+/// Space between the top of the playfield and a banner's panel, in
+/// points.
+pub(crate) const BANNER_MARGIN: f32 = 16.0;
 
 /// Corner radius of a screen's panel, in points.
 const CORNER_RADIUS: f32 = 8.0;
@@ -142,17 +146,45 @@ pub fn game_over(game: &Game, high_scores: &HighScores) -> Screen {
     }
 }
 
+/// The banner over the attract-mode demo: the demo plays on under it,
+/// and confirm starts a game.
+pub fn demo() -> Screen {
+    Screen {
+        heading: "DEMO".to_owned(),
+        table: Vec::new(),
+        lines: vec![format!("Press {} to play", CONFIRM_KEY.name())],
+    }
+}
+
 /// Paints `screen` over `field`, the playfield on screen: the field
 /// dimmed, still visible, and the text centred on a panel.
 pub fn paint(painter: &Painter, field: Rect, screen: &Screen) {
     painter.rect_filled(field, 0.0, palette::SCREEN_DIM);
+    paint_panel(painter, screen, |size| {
+        Rect::from_center_size(field.center(), size)
+    });
+}
+
+/// Paints `screen` as a banner at the top of `field`, the playfield on
+/// screen, which is not dimmed: the text on a panel centred
+/// horizontally, [`BANNER_MARGIN`] below the field's top.
+pub fn paint_banner(painter: &Painter, field: Rect, screen: &Screen) {
+    paint_panel(painter, screen, |size| {
+        let top = field.min.y + BANNER_MARGIN + PADDING;
+        Rect::from_min_size(pos2(field.center().x - size.x / 2.0, top), size)
+    });
+}
+
+/// Paints `screen`'s text on a panel, the text in the rectangle `place`
+/// gives for its size.
+fn paint_panel(painter: &Painter, screen: &Screen, place: impl FnOnce(Vec2) -> Rect) {
     let rows = layout(painter, screen);
     let width = rows
         .iter()
         .map(|(galley, _)| galley.size().x)
         .fold(0.0, f32::max);
     let height = rows.iter().map(|(galley, gap)| galley.size().y + gap).sum();
-    let text = Rect::from_center_size(field.center(), vec2(width, height));
+    let text = place(vec2(width, height));
     painter.rect_filled(
         text.expand(PADDING),
         CORNER_RADIUS,

@@ -2,6 +2,7 @@
 
 mod app;
 mod bindings;
+mod claim_fill;
 mod input;
 mod numbers;
 mod palette;
@@ -16,6 +17,8 @@ mod timestep;
 mod app_test;
 #[cfg(test)]
 mod bindings_test;
+#[cfg(test)]
+mod claim_fill_test;
 #[cfg(test)]
 mod input_test;
 #[cfg(test)]

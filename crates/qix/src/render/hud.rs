@@ -6,13 +6,13 @@
 //! letterboxed playfield and its text fits its columns at every window
 //! size.
 
-use eframe::egui::{Align2, FontId, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, pos2, vec2};
+use eframe::egui::{Align2, FontId, Painter, Pos2, Rect, Stroke, StrokeKind, pos2, vec2};
 use qix_core::tuning::STARTING_MULTIPLIER;
 use qix_core::{Game, MeterExpiry, SparxMeter};
 
 use crate::numbers::thousands;
 use crate::palette;
-use crate::render::board::diamond;
+use crate::render::sprite::{self, MARKER};
 
 /// Height of the strip, in playfield units.
 pub const HEIGHT: f32 = 12.0;
@@ -40,12 +40,13 @@ const VALUE_CENTRE: f32 = 0.66;
 /// Lives drawn as markers; more show as one marker and their count.
 pub const MAX_LIFE_MARKERS: u32 = 5;
 
-/// Distance from a life marker's centre to its corners, as a fraction of
-/// the strip's height.
-const LIFE_RADIUS: f32 = 0.12;
+/// Width and height of a life marker, as a fraction of the strip's
+/// height.
+const LIFE_SIZE: f32 = 0.24;
 
-/// Distance between the centres of two life markers, in life radii.
-const LIFE_SPACING: f32 = 2.6;
+/// Distance between the centres of two life markers, in life marker
+/// sizes.
+const LIFE_SPACING: f32 = 1.3;
 
 /// Width of the Sparx meter's bar, as a fraction of its column's width.
 const METER_WIDTH: f32 = 0.8;
@@ -201,11 +202,11 @@ fn paint_value(painter: &Painter, pos: Pos2, align: Align2, text: &str, height: 
 /// Paints `lives` centred on `centre`: a row of markers, or past
 /// [`MAX_LIFE_MARKERS`] one marker followed by the count.
 fn paint_lives(painter: &Painter, centre: Pos2, lives: u32, height: f32) {
-    let radius = LIFE_RADIUS * height;
-    let spacing = LIFE_SPACING * radius;
+    let pixel = LIFE_SIZE * height / sprite::mask_size(MARKER).0 as f32;
+    let spacing = LIFE_SPACING * LIFE_SIZE * height;
     if lives > MAX_LIFE_MARKERS {
         let marker = centre - vec2(spacing / 2.0, 0.0);
-        paint_life(painter, marker, radius);
+        paint_life(painter, marker, pixel);
         let count = format!("x{lives}");
         paint_value(painter, centre, Align2::LEFT_CENTER, &count, height);
         return;
@@ -213,18 +214,14 @@ fn paint_lives(painter: &Painter, centre: Pos2, lives: u32, height: f32) {
     let span = lives.saturating_sub(1) as f32 * spacing;
     let first = centre - vec2(span / 2.0, 0.0);
     for i in 0..lives {
-        paint_life(painter, first + vec2(i as f32 * spacing, 0.0), radius);
+        paint_life(painter, first + vec2(i as f32 * spacing, 0.0), pixel);
     }
 }
 
-/// Paints one life as a marker centred on `centre`, `radius` points to
-/// its corners.
-fn paint_life(painter: &Painter, centre: Pos2, radius: f32) {
-    painter.add(Shape::convex_polygon(
-        diamond(centre, radius).to_vec(),
-        palette::HUD_LIFE,
-        Stroke::NONE,
-    ));
+/// Paints one life as a marker centred on `centre`, `pixel` points per
+/// sprite pixel.
+fn paint_life(painter: &Painter, centre: Pos2, pixel: f32) {
+    painter.add(sprite::marker(centre, pixel, palette::HUD_LIFE));
 }
 
 /// Paints `meter` as a bar centred on `centre` in a column

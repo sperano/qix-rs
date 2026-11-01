@@ -5,10 +5,13 @@
 
 use std::ops::Range;
 
-use eframe::egui::{Mesh, Painter, Pos2, Rect, Shape, Stroke, emath::RectTransform, pos2, vec2};
+use eframe::egui::{
+    Color32, Mesh, Painter, Pos2, Rect, Shape, Stroke, emath::RectTransform, pos2, vec2,
+};
 use qix_core::{Board, Cell, Dir, DrawKind, Game, Point, Stix};
 
 use crate::palette;
+use crate::render::{claim_fill, sprite};
 
 /// Width of the border lines, in points.
 const BORDER_WIDTH: f32 = 2.0;
@@ -16,9 +19,9 @@ const BORDER_WIDTH: f32 = 2.0;
 /// Width of the stix, in points.
 const STIX_WIDTH: f32 = 2.0;
 
-/// Distance from the marker's centre to each of its diamond's corners, in
-/// points.
-const MARKER_RADIUS: f32 = 5.0;
+/// Game ticks between two flickers of the stix being drawn, when it swaps
+/// between the colour of its kind and [`palette::STIX_FLICKER`].
+pub const STIX_FLICKER_TICKS: u64 = 3;
 
 /// A horizontal run of claimed cells of the same kind in one row.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,25 +40,31 @@ impl CellRun {
     }
 }
 
-/// Paints `game`'s board through `to_screen`: the claimed cells, then the
-/// border, the stix and the marker on top.
-pub fn paint(painter: &Painter, to_screen: RectTransform, game: &Game) {
+/// Paints `game`'s board through `to_screen`: the claimed cells and over
+/// them `claim`, the cells of the claim being animated and how far its
+/// animation is, if any, then the border, the stix and the marker on top.
+pub fn paint(
+    painter: &Painter,
+    to_screen: RectTransform,
+    game: &Game,
+    claim: Option<(&[CellRun], f32)>,
+) {
     let board = game.board();
     painter.add(claimed_mesh(board, to_screen));
+    if let Some((runs, progress)) = claim {
+        claim_fill::paint(painter, to_screen, runs, progress);
+    }
     let border = Stroke::new(BORDER_WIDTH, palette::BORDER);
     painter.extend(border_segments(board).into_iter().map(|(from, to)| {
         let ends = [screen(to_screen, from), screen(to_screen, to)];
         Shape::line_segment(square_capped(ends, BORDER_WIDTH), border)
     }));
     if let Some(stix) = game.stix() {
-        paint_stix(painter, to_screen, stix);
+        paint_stix(painter, to_screen, stix, game.ticks());
     }
     let marker = screen(to_screen, game.marker().pos);
-    painter.add(Shape::convex_polygon(
-        diamond(marker, MARKER_RADIUS).to_vec(),
-        palette::MARKER,
-        Stroke::NONE,
-    ));
+    let inner = marker_inner(game.stix());
+    painter.add(sprite::marker(marker, sprite::PIXEL, inner));
 }
 
 /// Every claimed cell of `board` as maximal runs along its rows, top row
@@ -119,15 +128,22 @@ pub fn stix_runs(stix: &Stix) -> Vec<(DrawKind, &[Point])> {
         .collect()
 }
 
-/// The corners of a diamond centred on `center`, each `radius` from it,
-/// clockwise from the top.
-pub fn diamond(center: Pos2, radius: f32) -> [Pos2; 4] {
-    [
-        center - vec2(0.0, radius),
-        center + vec2(radius, 0.0),
-        center + vec2(0.0, radius),
-        center - vec2(radius, 0.0),
-    ]
+/// The colour of the stix's segments drawn with `kind` after `ticks` game
+/// ticks: it alternates with [`palette::STIX_FLICKER`] every
+/// [`STIX_FLICKER_TICKS`], starting with the colour of its kind.
+pub fn stix_colour(kind: DrawKind, ticks: u64) -> Color32 {
+    if (ticks / STIX_FLICKER_TICKS).is_multiple_of(2) {
+        palette::stix(kind)
+    } else {
+        palette::STIX_FLICKER
+    }
+}
+
+/// The colour of the marker's inside: that of the kind of the stix's last
+/// segment while it draws one, plain otherwise.
+pub fn marker_inner(stix: Option<&Stix>) -> Color32 {
+    stix.and_then(|stix| stix.kinds().last())
+        .map_or(palette::MARKER, |&kind| palette::stix(kind))
 }
 
 /// The ends of a line `width` wide from `ends[0]` to `ends[1]`, each pushed
@@ -153,11 +169,12 @@ fn claimed_mesh(board: &Board, to_screen: RectTransform) -> Mesh {
     mesh
 }
 
-/// Paints the stix, each run of segments in the colour of its kind.
-fn paint_stix(painter: &Painter, to_screen: RectTransform, stix: &Stix) {
+/// Paints the stix, each run of segments in the colour of its kind as
+/// [`stix_colour`] flickers it after `ticks` game ticks.
+fn paint_stix(painter: &Painter, to_screen: RectTransform, stix: &Stix, ticks: u64) {
     for (kind, points) in stix_runs(stix) {
         let points = points.iter().map(|&p| screen(to_screen, p)).collect();
-        painter.line(points, Stroke::new(STIX_WIDTH, palette::stix(kind)));
+        painter.line(points, Stroke::new(STIX_WIDTH, stix_colour(kind, ticks)));
     }
 }
 

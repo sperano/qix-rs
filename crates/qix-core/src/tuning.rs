@@ -151,3 +151,11 @@ pub const REPEAT_DELAY_TICKS: u32 = TICK_HZ / 3;
 /// Ticks between two repeats of a direction held while entering
 /// initials, or on a menu: ten a second.
 pub const REPEAT_TICKS: u32 = TICK_HZ / 10;
+
+/// Ticks the title screen sits idle before the attract-mode demo starts:
+/// ten seconds.
+pub const ATTRACT_DELAY_TICKS: u32 = 10 * TICK_HZ;
+
+/// Seed of the attract-mode demo's game: the one its script is tuned
+/// for.
+pub const DEMO_SEED: u64 = 1;

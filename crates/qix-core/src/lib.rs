@@ -1,14 +1,17 @@
 //! Game logic of the Qix clone: board, marker, stix, claiming, enemies,
-//! scoring, the game state machine and the high score table.
+//! scoring, the game state machine, the high score table and the
+//! attract-mode demo.
 //!
 //! The crate has no UI dependency, so every rule runs and is tested
 //! headlessly; the `qix` binary renders its state with egui.
 
+pub mod attract;
 pub mod bitset;
 pub mod board;
 mod border;
 pub mod claim;
 pub mod collision;
+pub mod demo;
 pub mod event;
 pub mod fuse;
 pub mod game;
@@ -31,6 +34,8 @@ pub mod tuning;
 pub mod vec2;
 
 #[cfg(test)]
+mod attract_test;
+#[cfg(test)]
 mod bitset_test;
 #[cfg(test)]
 mod board_test;
@@ -40,6 +45,8 @@ mod border_test;
 mod claim_test;
 #[cfg(test)]
 mod collision_test;
+#[cfg(test)]
+mod demo_test;
 #[cfg(test)]
 mod fuse_test;
 #[cfg(test)]
@@ -77,9 +84,11 @@ mod stix_test;
 #[cfg(test)]
 mod vec2_test;
 
+pub use attract::Attract;
 pub use bitset::BitSet;
 pub use board::{Board, Cell, DrawKind};
 pub use claim::{ClaimResult, CloseResult};
+pub use demo::{DEMO_SCRIPT, Demo, DemoStep};
 pub use event::{DeathCause, Event};
 pub use fuse::Fuse;
 pub use game::Game;
