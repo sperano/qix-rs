@@ -1,11 +1,13 @@
 use eframe::{App, Storage};
 use qix_core::tuning::ATTRACT_DELAY_TICKS;
-use qix_core::{DEMO_SCRIPT, GameState, HighScores, InputState};
+use qix_core::tuning::MARKER_STEP_TICKS;
+use qix_core::{DEMO_SCRIPT, Dir, DrawKind, GameState, HighScores, InputState};
 
 use crate::app::{QixApp, save_if_changed};
 use crate::persist::{HIGH_SCORES_KEY, SETTINGS_KEY, load_high_scores, load_settings};
 use crate::persist_test::{MemoryStorage, entry, stored};
 use crate::settings::{SCALE_RANGE, Scale, Settings};
+use crate::sound::Sound;
 
 /// The stored value of settings that only change the starting lives.
 const FIVE_LIVES: &str = "(starting_lives:5)";
@@ -280,4 +282,62 @@ fn stopping_the_demo_while_its_claim_animates_stops_the_animation() {
 
     assert!(std::ptr::eq(app.shown_game(), app.session().game()));
     assert_eq!(app.claim_fill().fresh(), None);
+}
+
+/// Holding up with the fast-draw button: from its start, the marker
+/// draws a stix up into the board.
+const DRAW_UP: InputState = InputState {
+    dir: Some(Dir::Up),
+    fast: true,
+    slow: false,
+    confirm: false,
+    pause: false,
+};
+
+/// An app with a game started, the marker one step of the stix up.
+fn app_one_step_up() -> QixApp {
+    let mut app = QixApp::new(None);
+    app.tick(&CONFIRM);
+    for _ in 0..MARKER_STEP_TICKS {
+        app.tick(&DRAW_UP);
+    }
+    app
+}
+
+#[test]
+fn a_step_of_the_stix_queues_its_sound() {
+    let app = app_one_step_up();
+
+    assert_eq!(app.sounds(), [Sound::Draw(DrawKind::Fast)]);
+}
+
+#[test]
+fn playing_the_sounds_empties_the_queue() {
+    let mut app = app_one_step_up();
+
+    app.play_sounds();
+
+    assert_eq!(app.sounds(), []);
+}
+
+#[test]
+fn a_paused_game_queues_no_sound() {
+    let mut app = app_one_step_up();
+    app.play_sounds();
+
+    app.tick(&InputState {
+        pause: true,
+        ..DRAW_UP
+    });
+    idle(&mut app, MARKER_STEP_TICKS);
+
+    assert_eq!(app.session().state(), GameState::Paused);
+    assert_eq!(app.sounds(), []);
+}
+
+#[test]
+fn the_demo_queues_no_sound() {
+    let app = app_at_the_first_claim_of_the_demo();
+
+    assert_eq!(app.sounds(), []);
 }

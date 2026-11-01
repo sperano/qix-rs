@@ -401,11 +401,12 @@ impl Game {
     }
 
     /// Draws one step of the stix towards `dir` with `kind`, starting a
-    /// stix when the marker is on the border; an illegal step leaves the
-    /// marker where it is.
+    /// stix when the marker is on the border, and raises [`Event::Draw`];
+    /// an illegal step leaves the marker where it is.
     ///
     /// A step onto a border point closes the stix: the area it cuts off
-    /// from every Qix is claimed and scored, the stix is dropped and its fuse
+    /// from every Qix is claimed and scored, raising [`Event::Claim`] when
+    /// it claims cells, the stix is dropped and its fuse
     /// put out, the marker is back on the border, at the closing point, and
     /// a Sparx the claim left off the border (one that was on the stix, or
     /// one the claim cut off) snaps back to it. A stix leaving the Qix in
@@ -422,9 +423,14 @@ impl Game {
         };
         stix.push(next, kind);
         self.marker.pos = next;
+        self.events.push(Event::Draw(kind));
         if self.board.is_border(next) {
             let close = self.board.close_stix(&stix, &self.qix);
             if let Some(claim) = &close.claim {
+                self.events.push(Event::Claim {
+                    cells: claim.cells,
+                    kind: claim.kind,
+                });
                 self.add_score(score_for_claim(claim, self.multiplier));
             }
             self.end_level_after(&close);

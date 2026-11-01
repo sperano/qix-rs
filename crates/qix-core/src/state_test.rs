@@ -1,3 +1,4 @@
+mod events;
 mod extra_lives;
 mod high_scores;
 mod rules;

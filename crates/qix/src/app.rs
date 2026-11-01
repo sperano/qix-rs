@@ -1,13 +1,15 @@
 //! The eframe application: samples input, runs the core ticks each frame
-//! owes, paints the playfield with the HUD and the screen of the
-//! session's state, the settings or the attract-mode demo, and keeps the
-//! high score table and the settings in eframe's storage.
+//! owes, plays the sounds of the session's events, paints the playfield
+//! with the HUD and the screen of the session's state, the settings or the
+//! attract-mode demo, and keeps the high score table and the settings in
+//! eframe's storage.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use eframe::{Storage, egui};
 use qix_core::{Attract, Demo, Game, GameState, HighScores, InputState, Rng, Session};
 
+use crate::audio::Output;
 use crate::claim_fill::ClaimFill;
 use crate::input::{self, InputLatch};
 use crate::persist;
@@ -16,6 +18,7 @@ use crate::render::screen::{self, Screen};
 use crate::render::{hud, settings::settings_screen};
 use crate::settings::Settings;
 use crate::settings_menu::SettingsMenu;
+use crate::sound::{self, Sound};
 use crate::timestep::FixedTimestep;
 
 /// The application state kept between frames.
@@ -39,6 +42,11 @@ pub struct QixApp {
     attract: Attract,
     /// The fill animation of the last claim of the game shown.
     claim_fill: ClaimFill,
+    /// Where the sound effects play.
+    audio: Output,
+    /// The sounds the session's ticks raised since the last frame played
+    /// them.
+    sounds: Vec<Sound>,
 }
 
 impl QixApp {
@@ -64,6 +72,8 @@ impl QixApp {
             resize_window: true,
             attract: Attract::new(),
             claim_fill,
+            audio: Output::open(),
+            sounds: Vec::new(),
         }
     }
 
@@ -82,6 +92,13 @@ impl QixApp {
     #[cfg(test)]
     pub(crate) fn claim_fill(&self) -> &ClaimFill {
         &self.claim_fill
+    }
+
+    /// The sounds the session's ticks raised since the last frame played
+    /// them.
+    #[cfg(test)]
+    pub(crate) fn sounds(&self) -> &[Sound] {
+        &self.sounds
     }
 
     /// The game painted on the playfield: the demo's while one plays, the
@@ -182,7 +199,8 @@ impl QixApp {
 
     /// Ticks the session with `input`, and the attract mode before it on
     /// the title screen: an input that stops the demo also reaches the
-    /// title, so confirm starts a game. Off the title, no demo plays.
+    /// title, so confirm starts a game. Off the title, no demo plays. The
+    /// session's events queue their sounds; the demo plays none.
     fn tick_session(&mut self, input: &InputState) {
         if self.session.state() == GameState::Title {
             self.attract.tick(input);
@@ -190,6 +208,14 @@ impl QixApp {
             self.attract.reset();
         }
         self.session.tick(input);
+        self.sounds.extend(sound::sounds(self.session.events()));
+    }
+
+    /// Plays the queued sounds and empties the queue.
+    pub(crate) fn play_sounds(&mut self) {
+        for sound in self.sounds.drain(..) {
+            self.audio.play(sound);
+        }
     }
 
     /// The screen over the playfield and where it goes: the settings
@@ -245,6 +271,7 @@ impl eframe::App for QixApp {
                 .map(|storage| storage as &mut dyn Storage);
             self.apply_settings(settings, storage);
         }
+        self.play_sounds();
         self.save_new_high_scores(frame);
         if std::mem::take(&mut self.resize_window) {
             let size = self.settings.scale.window_size();

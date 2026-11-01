@@ -3,8 +3,14 @@ name = "qix"
 version.workspace = true
 edition.workspace = true
 
+[features]
+# Sound effects through the default audio output; off by default so that
+# CI and headless builds need no audio libraries (ALSA on Linux).
+audio = ["dep:kira"]
+
 [dependencies]
 eframe = { version = "0.37", features = ["persistence"] }
+kira = { version = "0.12", default-features = false, features = ["cpal"], optional = true }
 qix-core.workspace = true
 serde = { version = "1", features = ["derive"] }
 

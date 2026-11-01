@@ -132,7 +132,7 @@ fn a_qix_death_takes_a_life_and_the_marker_back_to_the_stix_start() {
     let past_column = u32::from(COLUMN - start.x) + 1;
     let ticks = (1..=past_column * MARKER_STEP_TICKS).find(|_| {
         game.tick(&drawing(Dir::Right, DrawKind::Fast));
-        !game.events().is_empty()
+        game.events().contains(&Event::Death(DeathCause::Qix))
     });
 
     assert!(ticks.is_some(), "the Qix never killed");

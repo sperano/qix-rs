@@ -1,8 +1,21 @@
 //! What a tick of the game reports to the application.
 
+use crate::board::DrawKind;
+
 /// Something that happened during a tick.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Event {
+    /// The marker drew one more step of the stix, with this kind; the step
+    /// that closes the stix included.
+    Draw(DrawKind),
+    /// A stix closed and claimed cells, scored before any
+    /// [`Event::ExtraLife`] or [`Event::LevelComplete`] they bring.
+    Claim {
+        /// The cells the stix claimed.
+        cells: usize,
+        /// How the claimed cells were drawn.
+        kind: DrawKind,
+    },
     /// The player lost a life.
     Death(DeathCause),
     /// The score crossed a multiple of

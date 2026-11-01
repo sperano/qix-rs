@@ -34,5 +34,16 @@ Run the desktop game with:
 cargo run -p qix
 ```
 
+The game is silent by default. Build it with the `audio` feature for sound
+effects (drawing, claims, deaths, a completed level and extra lives),
+played through the default audio output; on Linux it needs the ALSA
+development files (`libasound2-dev` on Debian and Ubuntu):
+
+```sh
+cargo run -p qix --features audio
+```
+
+Without an audio device the game prints a warning and plays silently.
+
 Repository development and test conventions are documented in
 [`CLAUDE.md`](CLAUDE.md).

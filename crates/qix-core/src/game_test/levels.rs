@@ -25,6 +25,16 @@ const CLAIMED_BEFORE: [(u16, u16); 6] = [(0, 1), (1, 1), (2, 1), (0, 2), (1, 2),
 /// The cells right of the stix, which closing it claims.
 const STIX_CLAIM_CELLS: u32 = (W / 2) as u32 * H as u32;
 
+/// The events of the step closing the stix before any end of the level:
+/// the step itself and its claim.
+const CLOSING_EVENTS: [Event; 2] = [
+    Event::Draw(DrawKind::Fast),
+    Event::Claim {
+        cells: STIX_CLAIM_CELLS as usize,
+        kind: DrawKind::Fast,
+    },
+];
+
 /// The board's claimed fraction after the stix with every cell of
 /// [`CLAIMED_BEFORE`] claimed: 18 cells of 24.
 const FRACTION_AFTER: f32 = 0.75;
@@ -95,11 +105,15 @@ fn a_claim_exactly_at_the_threshold_completes_the_level() {
     assert!(game.is_level_complete());
     assert_eq!(
         game.events(),
-        [Event::LevelComplete {
-            fraction: FRACTION_AFTER,
-            bonus: 0,
-            split: false,
-        }]
+        [
+            CLOSING_EVENTS[0],
+            CLOSING_EVENTS[1],
+            Event::LevelComplete {
+                fraction: FRACTION_AFTER,
+                bonus: 0,
+                split: false,
+            },
+        ]
     );
     let claim_points = STIX_CLAIM_CELLS * POINTS_PER_CELL;
     assert_eq!(
@@ -118,11 +132,15 @@ fn a_threshold_completion_keeps_the_multiplier() {
 
     assert_eq!(
         game.events(),
-        [Event::LevelComplete {
-            fraction: FRACTION_AFTER,
-            bonus: 0,
-            split: false,
-        }]
+        [
+            CLOSING_EVENTS[0],
+            CLOSING_EVENTS[1],
+            Event::LevelComplete {
+                fraction: FRACTION_AFTER,
+                bonus: 0,
+                split: false,
+            },
+        ]
     );
     assert_eq!(game.multiplier(), STARTING_MULTIPLIER + 1);
 }
@@ -135,7 +153,7 @@ fn a_claim_below_the_threshold_does_not_complete_the_level() {
 
     assert!(game.board().claimed_fraction() < CLAIM_THRESHOLD_DEFAULT);
     assert!(!game.is_level_complete());
-    assert_eq!(game.events(), []);
+    assert_eq!(game.events(), CLOSING_EVENTS);
     let ticks = game.ticks();
     game.tick(&holding(Dir::Left));
     assert_eq!(game.ticks(), ticks + 1, "the game stopped ticking");
@@ -154,11 +172,15 @@ fn the_bonus_scores_each_whole_percent_above_the_threshold() {
     assert_eq!(game.score().points(), claim_points + bonus);
     assert_eq!(
         game.events(),
-        [Event::LevelComplete {
-            fraction: FRACTION_AFTER,
-            bonus,
-            split: false,
-        }]
+        [
+            CLOSING_EVENTS[0],
+            CLOSING_EVENTS[1],
+            Event::LevelComplete {
+                fraction: FRACTION_AFTER,
+                bonus,
+                split: false,
+            },
+        ]
     );
 }
 
@@ -211,11 +233,15 @@ fn nothing_moves_after_the_completing_claim_in_its_tick() {
     assert!(!below.is_level_complete());
     assert_eq!(
         game.events(),
-        [Event::LevelComplete {
-            fraction: FRACTION_AFTER,
-            bonus: 0,
-            split: false,
-        }]
+        [
+            CLOSING_EVENTS[0],
+            CLOSING_EVENTS[1],
+            Event::LevelComplete {
+                fraction: FRACTION_AFTER,
+                bonus: 0,
+                split: false,
+            },
+        ]
     );
     assert_eq!((game.qix(), game.sparx()), (&last.0[..], &last.1[..]));
     assert_ne!(
