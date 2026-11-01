@@ -1,8 +1,10 @@
 mod extra_lives;
+mod high_scores;
 
 use crate::qix_test::qix_at;
 use crate::tuning::{
-    BONUS_PER_PERCENT, CLAIM_THRESHOLD_RANGE, FIRST_LEVEL, MARKER_STEP_TICKS, STARTING_LIVES,
+    BONUS_PER_PERCENT, CLAIM_THRESHOLD_RANGE, FIRST_LEVEL, INITIALS_LEN, MARKER_STEP_TICKS,
+    STARTING_LIVES,
 };
 use crate::{
     Board, Cell, ClaimThreshold, Dir, DrawKind, Event, Game, GameState, InputState, Point, Rng,
@@ -435,8 +437,13 @@ fn the_high_score_outlives_the_game_that_set_it() {
     }
     assert_eq!(session.state(), GameState::GameOver);
 
-    session.tick(&CONFIRM);
+    // One confirm leaves the game over screen, one per letter enters the
+    // initials.
+    for _ in 0..=INITIALS_LEN {
+        session.tick(&CONFIRM);
+    }
 
+    assert_eq!(session.state(), GameState::Title);
     assert_eq!(session.game().score().points(), 0);
     assert_eq!(session.high_score(), best);
 }

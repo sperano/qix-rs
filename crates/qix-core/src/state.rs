@@ -1,8 +1,11 @@
 //! The game state machine: the title screen, play, the pause, the end of
-//! a level and the end of the game, around one [`Game`].
+//! a level, the end of the game and the entry of a high score, around
+//! one [`Game`] and the [`HighScores`] table.
 
 use crate::event::Event;
 use crate::game::Game;
+use crate::high_score::{HighScore, HighScores};
+use crate::initials::InitialsEntry;
 use crate::input::InputState;
 
 /// Where the session stands, which decides what a tick does.
@@ -25,27 +28,41 @@ pub enum GameState {
         /// The level ended by splitting the Qix apart.
         split: bool,
     },
-    /// The last life is lost: confirm goes back to the title screen with
+    /// The last life is lost: confirm enters the initials of a score that
+    /// makes the high score table, or goes back to the title screen with
     /// a new game.
     GameOver,
+    /// The initials of the game's score are being entered: once they are,
+    /// the score goes into the table and the title screen shows a new
+    /// game.
+    HighScoreEntry(InitialsEntry),
 }
 
-/// A [`Game`], the [`GameState`] it is in and the best score of the
-/// session.
+/// A [`Game`], the [`GameState`] it is in, the high score table and the
+/// best score so far.
 #[derive(Debug)]
 pub struct Session {
     state: GameState,
     game: Game,
+    high_scores: HighScores,
     high_score: u32,
 }
 
 impl Session {
-    /// A session on the title screen, which starts `game` on confirm.
+    /// A session on the title screen, which starts `game` on confirm,
+    /// with an empty high score table.
     pub fn new(game: Game) -> Self {
+        Self::with_high_scores(game, HighScores::default())
+    }
+
+    /// A session on the title screen, which starts `game` on confirm,
+    /// with the table `high_scores` of earlier sessions.
+    pub fn with_high_scores(game: Game, high_scores: HighScores) -> Self {
         Self {
             state: GameState::Title,
             game,
-            high_score: 0,
+            high_score: high_scores.best(),
+            high_scores,
         }
     }
 
@@ -59,11 +76,16 @@ impl Session {
         &self.game
     }
 
-    /// The best score of every game of the session, the one being played
-    /// included: it rises with the score as soon as the score passes it,
-    /// and starts at zero.
+    /// The best score of the high score table and of every game of the
+    /// session, the one being played included: it rises with the score as
+    /// soon as the score passes it.
     pub fn high_score(&self) -> u32 {
         self.high_score
+    }
+
+    /// The high score table, with the scores entered this session.
+    pub fn high_scores(&self) -> &HighScores {
+        &self.high_scores
     }
 
     /// Advances the session by one step: [`Game::tick`] with `input`
@@ -74,8 +96,10 @@ impl Session {
     /// starts (from the title, or the next level) first moves on the
     /// tick after it. A tick of the game raising [`Event::GameOver`] or
     /// [`Event::LevelComplete`] ends play. Out of play, only those presses
-    /// do anything: nothing ticks in [`GameState::Paused`]. Every tick
-    /// raises the high score to the game's score if that is higher.
+    /// do anything, but for [`GameState::HighScoreEntry`], which hands
+    /// every tick's input to its [`InitialsEntry`]: nothing ticks in
+    /// [`GameState::Paused`]. Every tick raises the high score to the
+    /// game's score if that is higher.
     pub fn tick(&mut self, input: &InputState) {
         self.state = match self.state {
             GameState::Title if input.confirm => GameState::Playing,
@@ -86,13 +110,34 @@ impl Session {
                 self.game.start_level(self.game.level() + 1);
                 GameState::Playing
             }
-            GameState::GameOver if input.confirm => {
-                self.game.restart();
-                GameState::Title
-            }
+            GameState::GameOver if input.confirm => self.end_game(),
+            GameState::HighScoreEntry(mut entry) => match entry.tick(input) {
+                Some(name) => {
+                    let score = self.game.score().points();
+                    self.high_scores.insert(HighScore { name, score });
+                    self.restart()
+                }
+                None => GameState::HighScoreEntry(entry),
+            },
             state => state,
         };
         self.high_score = self.high_score.max(self.game.score().points());
+    }
+
+    /// The state after the game over screen: the initials entry when the
+    /// score makes the table, the title with a new game otherwise.
+    fn end_game(&mut self) -> GameState {
+        if self.high_scores.qualifies(self.game.score().points()) {
+            GameState::HighScoreEntry(InitialsEntry::new())
+        } else {
+            self.restart()
+        }
+    }
+
+    /// Starts a new game and returns the title screen that shows it.
+    fn restart(&mut self) -> GameState {
+        self.game.restart();
+        GameState::Title
     }
 
     /// Ticks the game with `input` and returns the state its events lead

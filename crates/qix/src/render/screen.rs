@@ -1,15 +1,17 @@
-//! The screens over the playfield outside play: the title with the
-//! controls, the pause, the end of a level and the end of the game.
+//! The screens over the playfield outside play: the title with the high
+//! scores and the controls, the pause, the end of a level, the end of the
+//! game and the entry of a high score.
 
 use std::sync::Arc;
 
 use eframe::egui::{FontId, Galley, Painter, Rect, pos2, vec2};
 use qix_core::tuning::SLOW_DRAW_FACTOR;
-use qix_core::{Game, GameState, Session};
+use qix_core::{Game, GameState, HighScores, Session};
 
 use crate::input::{CONFIRM_KEY, DIR_KEYS, FAST_KEY, OVERLAY_KEY, PAUSE_KEY, SLOW_KEY};
 use crate::numbers::thousands;
 use crate::palette;
+use crate::render::high_score::{high_score_entry, table_rows};
 
 /// Size of a screen's heading, in points.
 const HEADING_SIZE: f32 = 40.0;
@@ -20,6 +22,9 @@ const LINE_SIZE: f32 = 18.0;
 /// Space between the heading and the first line, in points.
 const HEADING_GAP: f32 = 16.0;
 
+/// Space between the last row of a table and the first line, in points.
+const TABLE_GAP: f32 = 16.0;
+
 /// Space between a screen's text and the edge of its panel, in points.
 const PADDING: f32 = 24.0;
 
@@ -29,18 +34,21 @@ const CORNER_RADIUS: f32 = 8.0;
 /// Converts a fraction to a percentage.
 const PERCENT: f32 = 100.0;
 
-/// The text of a screen: a heading over lines, all centred.
+/// The text of a screen, all centred: a heading, the rows of a table in
+/// a monospace font, then lines.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Screen {
     pub heading: String,
+    pub table: Vec<String>,
     pub lines: Vec<String>,
 }
 
 /// The screen `session` shows over the playfield, none while playing.
 pub fn screen(session: &Session) -> Option<Screen> {
     let game = session.game();
+    let high_scores = session.high_scores();
     match session.state() {
-        GameState::Title => Some(title()),
+        GameState::Title => Some(title(high_scores)),
         GameState::Playing => None,
         GameState::Paused => Some(paused()),
         GameState::LevelComplete {
@@ -48,15 +56,17 @@ pub fn screen(session: &Session) -> Option<Screen> {
             bonus,
             split,
         } => Some(level_complete(game, fraction, bonus, split)),
-        GameState::GameOver => Some(game_over(game)),
+        GameState::GameOver => Some(game_over(game, high_scores)),
+        GameState::HighScoreEntry(entry) => Some(high_score_entry(game, high_scores, &entry)),
     }
 }
 
-/// The title screen, with the controls.
-pub fn title() -> Screen {
+/// The title screen, with `high_scores` and the controls.
+pub fn title(high_scores: &HighScores) -> Screen {
     let dirs: Vec<_> = DIR_KEYS.iter().map(|(key, _)| key.name()).collect();
     Screen {
         heading: "QIX".to_owned(),
+        table: table_rows(high_scores),
         lines: vec![
             format!("{}: move", dirs.join("/")),
             format!("hold {} while moving: draw fast", FAST_KEY.name()),
@@ -76,6 +86,7 @@ pub fn title() -> Screen {
 pub fn paused() -> Screen {
     Screen {
         heading: "PAUSED".to_owned(),
+        table: Vec::new(),
         lines: vec![format!("Press {} to resume", PAUSE_KEY.name())],
     }
 }
@@ -100,19 +111,27 @@ pub fn level_complete(game: &Game, fraction: f32, bonus: u32, split: bool) -> Sc
     ]);
     Screen {
         heading: format!("LEVEL {} COMPLETE", game.level()),
+        table: Vec::new(),
         lines,
     }
 }
 
-/// The end of `game`, with its final score.
-pub fn game_over(game: &Game) -> Screen {
+/// The end of `game`, with its final score and whether it makes
+/// `high_scores`.
+pub fn game_over(game: &Game, high_scores: &HighScores) -> Screen {
+    let points = game.score().points();
+    let mut lines = vec![format!("Final score {}", thousands(points))];
+    if high_scores.qualifies(points) {
+        lines.push("A new high score!".to_owned());
+    }
+    lines.extend([
+        String::new(),
+        format!("Press {} to continue", CONFIRM_KEY.name()),
+    ]);
     Screen {
         heading: "GAME OVER".to_owned(),
-        lines: vec![
-            format!("Final score {}", thousands(game.score().points())),
-            String::new(),
-            format!("Press {} to continue", CONFIRM_KEY.name()),
-        ],
+        table: Vec::new(),
+        lines,
     }
 }
 
@@ -142,19 +161,26 @@ pub fn paint(painter: &Painter, field: Rect, screen: &Screen) {
 }
 
 /// The rows of `screen`'s text, top to bottom, each with the space under
-/// it: the heading, then each line.
+/// it: the heading, each row of the table, then each line.
 fn layout(painter: &Painter, screen: &Screen) -> Vec<(Arc<Galley>, f32)> {
     let heading = painter.layout_no_wrap(
         screen.heading.clone(),
         FontId::proportional(HEADING_SIZE),
         palette::SCREEN_HEADING,
     );
-    let lines = screen.lines.iter().map(|line| {
-        let font = FontId::proportional(LINE_SIZE);
-        let galley = painter.layout_no_wrap(line.clone(), font, palette::SCREEN_TEXT);
-        (galley, 0.0)
+    let text =
+        |line: &String, font| painter.layout_no_wrap(line.clone(), font, palette::SCREEN_TEXT);
+    let last_row = screen.table.len().checked_sub(1);
+    let table = screen.table.iter().enumerate().map(|(i, row)| {
+        let gap = if Some(i) == last_row { TABLE_GAP } else { 0.0 };
+        (text(row, FontId::monospace(LINE_SIZE)), gap)
     });
+    let lines = screen
+        .lines
+        .iter()
+        .map(|line| (text(line, FontId::proportional(LINE_SIZE)), 0.0));
     std::iter::once((heading, HEADING_GAP))
+        .chain(table)
         .chain(lines)
         .collect()
 }

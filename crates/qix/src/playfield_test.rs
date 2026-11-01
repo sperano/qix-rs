@@ -1,7 +1,9 @@
 use eframe::egui::{self, Pos2, Rect, Shape, Vec2, pos2, vec2};
 use qix_core::tuning::MARKER_STEP_TICKS;
 use qix_core::tuning::{BOARD_H, BOARD_W};
-use qix_core::{Board, Cell, Dir, DrawKind, Game, InputState, Qix, Rng};
+use qix_core::{
+    Board, Cell, Dir, DrawKind, Game, HighScore, HighScores, Initials, InputState, Qix, Rng,
+};
 
 use crate::palette;
 use crate::playfield::{hud_units, letterbox, playfield_units, show, to_screen, window_units};
@@ -10,6 +12,10 @@ use crate::render::screen::{Screen, paused, title};
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1;
+
+/// High scores on the title screen painted by
+/// [`a_screen_adds_its_heading_each_row_and_each_line_over_the_playfield`].
+const TITLE_SCORES: u32 = 3;
 
 /// Tolerance for comparing screen coordinates, in points.
 const EPSILON: f32 = 1e-3;
@@ -172,12 +178,19 @@ fn the_overlay_adds_its_text() {
 }
 
 #[test]
-fn a_screen_adds_its_heading_and_each_line_over_the_playfield() {
+fn a_screen_adds_its_heading_each_row_and_each_line_over_the_playfield() {
     let game = Game::new(Rng::new(SEED));
-    let screen = title();
+    let table = (1..=TITLE_SCORES)
+        .map(|score| HighScore {
+            name: Initials::FIRST,
+            score,
+        })
+        .collect::<Vec<_>>();
+    let screen = title(&HighScores::from(table));
+    assert_eq!(screen.table.len(), usize::try_from(TITLE_SCORES).unwrap());
     let shapes = painted_with(&game, Some(&screen), false);
     let texts = count(&shapes, |s| matches!(s, Shape::Text(_)));
-    assert_eq!(texts, 1 + screen.lines.len());
+    assert_eq!(texts, 1 + screen.table.len() + screen.lines.len());
     let field = painted(&game, false);
     assert_eq!(
         shapes[..field.len()],

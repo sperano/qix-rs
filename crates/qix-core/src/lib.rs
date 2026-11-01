@@ -1,5 +1,5 @@
 //! Game logic of the Qix clone: board, marker, stix, claiming, enemies,
-//! scoring and the game state machine.
+//! scoring, the game state machine and the high score table.
 //!
 //! The crate has no UI dependency, so every rule runs and is tested
 //! headlessly; the `qix` binary renders its state with egui.
@@ -13,6 +13,8 @@ pub mod event;
 pub mod fuse;
 pub mod game;
 pub mod geometry;
+pub mod high_score;
+pub mod initials;
 pub mod input;
 pub mod level;
 pub mod marker;
@@ -43,6 +45,10 @@ mod fuse_test;
 mod game_test;
 #[cfg(test)]
 mod geometry_test;
+#[cfg(test)]
+mod high_score_test;
+#[cfg(test)]
+mod initials_test;
 #[cfg(test)]
 mod input_test;
 #[cfg(test)]
@@ -75,6 +81,8 @@ pub use event::{DeathCause, Event};
 pub use fuse::Fuse;
 pub use game::Game;
 pub use geometry::{Dir, Point, in_triangle, segments_intersect};
+pub use high_score::{HighScore, HighScores};
+pub use initials::{Initials, InitialsEntry, InvalidInitials};
 pub use input::InputState;
 pub use level::{ClaimThreshold, LevelConfig};
 pub use marker::{Marker, MarkerState};
