@@ -128,7 +128,7 @@ pub fn samples(sound: Sound) -> Vec<f32> {
 }
 
 /// The number of samples `tone` lasts at [`SAMPLE_RATE`].
-pub fn tone_len(tone: Tone) -> usize {
+fn tone_len(tone: Tone) -> usize {
     (tone.secs * SAMPLE_RATE as f32).round() as usize
 }
 

@@ -1,13 +1,18 @@
 //! The [`Event::Draw`] and [`Event::Claim`] a stix raises through
 //! [`Game::tick`], which the application plays sounds for.
 
-use super::{SEED, draw_step_ticks, drawing, hold, holding, pen};
-use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS};
+use super::{SEED, draw, draw_step_ticks, drawing, hold, holding, pen};
+use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS, STARTING_LIVES};
 use crate::{Board, Dir, DrawKind, Event, Game, Rng};
 
 /// The column of the full board the Qix is [`pen`]ned in, left of the
 /// stix the tests draw up from the marker's start.
 const PEN_COLUMN: u16 = 1;
+
+/// Steps of the first segment of the stix
+/// [`the_closing_step_raises_its_draw_then_the_claim_then_its_extra_lives`]
+/// draws with another kind than the rest.
+const FIRST_SEGMENT_STEPS: u32 = 3;
 
 /// A full-size game with no Sparx and its Qix penned in [`PEN_COLUMN`].
 fn penned_game() -> Game {
@@ -60,30 +65,54 @@ fn walking_the_border_raises_no_draw() {
     }
 }
 
-#[test]
-fn the_closing_step_raises_its_draw_then_the_claim() {
-    let mut game = penned_game();
-    let ticks = u32::from(BOARD_H) * draw_step_ticks(DrawKind::Fast);
-    let before = game.board().claimed_fraction();
+/// Draws the stix up from where the marker is with `kind` until it
+/// closes, and returns the events of the closing tick.
+fn close_up(game: &mut Game, kind: DrawKind) -> Vec<Event> {
+    let input = drawing(Dir::Up, kind);
+    let mut drawn = game.stix().is_some();
+    for _ in 0..u32::from(BOARD_H) * draw_step_ticks(kind) {
+        game.tick(&input);
+        if drawn && game.stix().is_none() {
+            return game.events().to_vec();
+        }
+        drawn |= game.stix().is_some();
+    }
+    panic!("the stix did not close");
+}
 
-    let events = events_drawing_up(&mut game, DrawKind::Fast, ticks);
-
-    assert_eq!(game.stix(), None, "the stix did not close");
-    let claim = events
-        .iter()
-        .position(|event| matches!(event, Event::Claim { .. }))
-        .expect("no claim");
-    assert_eq!(events[claim - 1], Event::Draw(DrawKind::Fast));
-    let Event::Claim { cells, kind } = events[claim] else {
-        unreachable!()
-    };
-    assert_eq!(kind, DrawKind::Fast);
-    let cells_after = game.board().claimed_fraction() - before;
+/// The cells claimed on `game`'s board since it had `before` of it.
+fn cells_claimed_since(game: &Game, before: f32) -> usize {
     let total = f32::from(BOARD_W) * f32::from(BOARD_H);
-    assert_eq!(cells as f32, (cells_after * total).round());
-    let after_claim = &events[claim + 1..];
-    assert!(
-        after_claim.iter().all(|event| *event == Event::ExtraLife),
-        "{after_claim:?}"
-    );
+    ((game.board().claimed_fraction() - before) * total).round() as usize
+}
+
+#[test]
+fn the_closing_step_raises_its_draw_then_the_claim_then_its_extra_lives() {
+    let cases = [
+        (None, DrawKind::Fast, DrawKind::Fast),
+        (Some(DrawKind::Slow), DrawKind::Slow, DrawKind::Slow),
+        (Some(DrawKind::Slow), DrawKind::Fast, DrawKind::Fast),
+        (Some(DrawKind::Fast), DrawKind::Slow, DrawKind::Fast),
+    ];
+    for (first, last, claim_kind) in cases {
+        let mut game = penned_game();
+        let before = game.board().claimed_fraction();
+        if let Some(kind) = first {
+            draw(&mut game, Dir::Up, kind, FIRST_SEGMENT_STEPS);
+        }
+
+        let events = close_up(&mut game, last);
+
+        let lives = game.lives() - STARTING_LIVES;
+        assert!(lives > 0, "{first:?} then {last:?}: no extra life");
+        let mut expected = vec![
+            Event::Draw(last),
+            Event::Claim {
+                cells: cells_claimed_since(&game, before),
+                kind: claim_kind,
+            },
+        ];
+        expected.extend(vec![Event::ExtraLife; lives as usize]);
+        assert_eq!(events, expected, "{first:?} then {last:?}");
+    }
 }

@@ -14,24 +14,26 @@ const LEVEL_COMPLETE: Event = Event::LevelComplete {
     split: false,
 };
 
+/// One event of each kind, with the sound it plays.
+const CASES: [(Event, Option<Sound>); 7] = [
+    (
+        Event::Draw(DrawKind::Fast),
+        Some(Sound::Draw(DrawKind::Fast)),
+    ),
+    (
+        Event::Draw(DrawKind::Slow),
+        Some(Sound::Draw(DrawKind::Slow)),
+    ),
+    (CLAIM, Some(Sound::Claim)),
+    (Event::Death(DeathCause::Sparx), Some(Sound::Death)),
+    (Event::ExtraLife, Some(Sound::ExtraLife)),
+    (LEVEL_COMPLETE, Some(Sound::LevelComplete)),
+    (Event::GameOver, None),
+];
+
 #[test]
 fn each_event_plays_its_sound() {
-    let cases = [
-        (
-            Event::Draw(DrawKind::Fast),
-            Some(Sound::Draw(DrawKind::Fast)),
-        ),
-        (
-            Event::Draw(DrawKind::Slow),
-            Some(Sound::Draw(DrawKind::Slow)),
-        ),
-        (CLAIM, Some(Sound::Claim)),
-        (Event::Death(DeathCause::Sparx), Some(Sound::Death)),
-        (Event::ExtraLife, Some(Sound::ExtraLife)),
-        (LEVEL_COMPLETE, Some(Sound::LevelComplete)),
-        (Event::GameOver, None),
-    ];
-    for (event, sound) in cases {
+    for (event, sound) in CASES {
         assert_eq!(sound_for(&event), sound, "{event:?}");
     }
 }
@@ -71,7 +73,20 @@ fn the_last_death_plays_the_death_alone() {
 }
 
 #[test]
-fn all_lists_every_sound_once() {
+fn all_lists_every_sound_an_event_plays() {
+    for sound in CASES.iter().filter_map(|(event, _)| sound_for(event)) {
+        assert!(Sound::ALL.contains(&sound), "{sound:?} is not in ALL");
+    }
+    for sound in Sound::ALL {
+        let played = CASES
+            .iter()
+            .any(|(event, _)| sound_for(event) == Some(sound));
+        assert!(played, "no event plays {sound:?}");
+    }
+}
+
+#[test]
+fn all_lists_no_sound_twice() {
     for (i, sound) in Sound::ALL.iter().enumerate() {
         assert!(!Sound::ALL[..i].contains(sound), "{sound:?} twice");
     }
