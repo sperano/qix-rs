@@ -1,3 +1,4 @@
+use eframe::egui::Key;
 use qix_core::tuning::{
     CLAIM_THRESHOLD_RANGE, HIGH_SCORE_COUNT, MARKER_STEP_TICKS, POINTS_PER_CELL,
 };
@@ -6,6 +7,7 @@ use qix_core::{
     InputState, Point, Qix, Rng, Session, Sparx, SparxKind, Vec2,
 };
 
+use crate::bindings::{Control, KeyBindings};
 use crate::render::high_score::table_rows;
 use crate::render::screen::{Screen, game_over, level_complete, paused, screen, title};
 
@@ -159,7 +161,7 @@ fn level_screens(session: &Session) -> (Option<Screen>, Screen) {
         panic!("level not complete: {:?}", session.state());
     };
     let expected = level_complete(session.game(), fraction, bonus, split);
-    (screen(session), expected)
+    (screen(session, &KeyBindings::default()), expected)
 }
 
 /// A session on a free `W x H` board, started from the title, played
@@ -190,7 +192,10 @@ fn lost_game() -> Session {
 
 #[test]
 fn a_new_session_shows_the_title_screen() {
-    assert_eq!(screen(&new_session()), Some(title(&HighScores::default())));
+    assert_eq!(
+        screen(&new_session(), &KeyBindings::default()),
+        Some(title(&HighScores::default(), &KeyBindings::default()))
+    );
 }
 
 #[test]
@@ -207,16 +212,16 @@ fn a_session_with_high_scores_shows_them_on_the_title() {
     ]);
     let session = Session::with_high_scores(Game::new(Rng::new(SEED)), table.clone());
 
-    let shown = screen(&session).unwrap();
+    let shown = screen(&session, &KeyBindings::default()).unwrap();
 
     assert_eq!(shown.table, ["1. QIX  12,345", "2. AAA      10"]);
-    assert_eq!(shown, title(&table));
+    assert_eq!(shown, title(&table, &KeyBindings::default()));
 }
 
 #[test]
 fn the_title_screen_lists_the_controls() {
     assert_eq!(
-        title(&HighScores::default()),
+        title(&HighScores::default(), &KeyBindings::default()),
         Screen {
             heading: "QIX".to_owned(),
             table: Vec::new(),
@@ -226,6 +231,7 @@ fn the_title_screen_lists_the_controls() {
                 "hold X while moving: draw slow, x2 points".to_owned(),
                 "Escape: pause".to_owned(),
                 "F1: debug overlay".to_owned(),
+                "F2: settings".to_owned(),
                 String::new(),
                 "Press Enter to start".to_owned(),
             ],
@@ -237,7 +243,7 @@ fn the_title_screen_lists_the_controls() {
 fn playing_shows_no_screen() {
     let mut session = new_session();
     session.tick(&press(true, false));
-    assert_eq!(screen(&session), None);
+    assert_eq!(screen(&session, &KeyBindings::default()), None);
 }
 
 #[test]
@@ -245,7 +251,7 @@ fn a_paused_session_shows_the_pause_screen() {
     let mut session = new_session();
     session.tick(&press(true, false));
     session.tick(&press(false, true));
-    assert_eq!(screen(&session), Some(paused()));
+    assert_eq!(screen(&session, &KeyBindings::default()), Some(paused()));
     assert_eq!(paused().lines, ["Press Escape to resume"]);
 }
 
@@ -318,10 +324,13 @@ fn the_title_screen_lists_the_high_scores_and_the_controls() {
         score: 1,
     }]);
 
-    let title = title(&table);
+    let title = title(&table, &KeyBindings::default());
 
     assert_eq!(title.table, table_rows(&table));
-    assert_eq!(title.lines, self::title(&HighScores::default()).lines);
+    assert_eq!(
+        title.lines,
+        self::title(&HighScores::default(), &KeyBindings::default()).lines
+    );
 }
 
 #[test]
@@ -361,7 +370,19 @@ fn a_lost_game_shows_the_game_over_screen() {
     let session = lost_game();
     assert_eq!(session.state(), GameState::GameOver);
     assert_eq!(
-        screen(&session),
+        screen(&session, &KeyBindings::default()),
         Some(game_over(session.game(), session.high_scores()))
     );
+}
+
+#[test]
+fn the_title_screen_names_the_bound_keys() {
+    let mut keys = KeyBindings::default();
+    assert!(keys.bind(Control::Up, Key::W));
+    assert!(keys.bind(Control::Fast, Key::Space));
+
+    let lines = title(&HighScores::default(), &keys).lines;
+
+    assert_eq!(lines[0], "W/Down/Left/Right: move");
+    assert_eq!(lines[1], "hold Space while moving: draw fast");
 }

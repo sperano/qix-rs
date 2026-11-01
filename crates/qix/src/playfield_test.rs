@@ -5,6 +5,7 @@ use qix_core::{
     Board, Cell, Dir, DrawKind, Game, HighScore, HighScores, Initials, InputState, Qix, Rng,
 };
 
+use crate::bindings::KeyBindings;
 use crate::palette;
 use crate::playfield::{hud_units, letterbox, playfield_units, show, to_screen, window_units};
 use crate::render::hud::{self, Hud};
@@ -186,7 +187,7 @@ fn a_screen_adds_its_heading_each_row_and_each_line_over_the_playfield() {
             score,
         })
         .collect::<Vec<_>>();
-    let screen = title(&HighScores::from(table));
+    let screen = title(&HighScores::from(table), &KeyBindings::default());
     assert_eq!(screen.table.len(), usize::try_from(TITLE_SCORES).unwrap());
     let shapes = painted_with(&game, Some(&screen), false);
     let texts = count(&shapes, |s| matches!(s, Shape::Text(_)));
@@ -216,7 +217,7 @@ fn the_title_paints_the_high_scores_between_the_heading_and_the_controls() {
         name: Initials::FIRST,
         score: 1,
     }]);
-    let screen = title(&table);
+    let screen = title(&table, &KeyBindings::default());
 
     let shapes = painted_with(&Game::new(Rng::new(SEED)), Some(&screen), false);
 

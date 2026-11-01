@@ -6,6 +6,7 @@ pub mod high_score;
 pub mod hud;
 pub mod overlay;
 pub mod screen;
+pub mod settings;
 
 #[cfg(test)]
 mod board_test;
@@ -19,3 +20,5 @@ mod hud_test;
 mod overlay_test;
 #[cfg(test)]
 mod screen_test;
+#[cfg(test)]
+mod settings_test;

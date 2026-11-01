@@ -72,6 +72,10 @@ pub const EXTRA_LIFE_EVERY: u32 = 30_000;
 /// extra life past it is lost.
 pub const MAX_LIVES: u32 = 9;
 
+/// The starting lives the settings may choose from; others are clamped
+/// into it.
+pub const STARTING_LIVES_RANGE: RangeInclusive<u32> = 1..=MAX_LIVES;
+
 /// Ticks after a death during which the Sparx cannot kill the marker and
 /// the marker cannot draw: two seconds.
 pub const RESPAWN_GRACE_TICKS: u32 = 2 * TICK_HZ;
@@ -140,10 +144,10 @@ pub const HIGH_SCORE_COUNT: usize = 10;
 /// Letters in the initials that name a high score.
 pub const INITIALS_LEN: usize = 3;
 
-/// Ticks a direction is held while entering initials before it repeats:
-/// a third of a second.
-pub const INITIALS_REPEAT_DELAY_TICKS: u32 = TICK_HZ / 3;
+/// Ticks a direction is held while entering initials, or on a menu,
+/// before it repeats: a third of a second.
+pub const REPEAT_DELAY_TICKS: u32 = TICK_HZ / 3;
 
 /// Ticks between two repeats of a direction held while entering
-/// initials: ten a second.
-pub const INITIALS_REPEAT_TICKS: u32 = TICK_HZ / 10;
+/// initials, or on a menu: ten a second.
+pub const REPEAT_TICKS: u32 = TICK_HZ / 10;

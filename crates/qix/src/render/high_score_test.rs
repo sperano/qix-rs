@@ -3,6 +3,7 @@ use qix_core::{Dir, GameState, HighScore, HighScores, Initials, InitialsEntry, I
 
 use qix_core::Session;
 
+use crate::bindings::KeyBindings;
 use crate::numbers::thousands;
 use crate::render::high_score::{high_score_entry, initials_row, table_rows};
 use crate::render::screen::{Screen, screen};
@@ -104,7 +105,12 @@ fn the_entry_screen_shows_the_initials_the_rank_and_the_controls() {
     let table = HighScores::from(vec![entry("TOP", points + 1)]);
 
     assert_eq!(
-        high_score_entry(&game, &table, &InitialsEntry::new()),
+        high_score_entry(
+            &game,
+            &table,
+            &InitialsEntry::new(),
+            &KeyBindings::default()
+        ),
         Screen {
             heading: "NEW HIGH SCORE".to_owned(),
             table: vec!["[A] A  A ".to_owned()],
@@ -127,10 +133,15 @@ fn a_session_entering_initials_shows_the_entry_screen() {
         panic!("not entering initials: {:?}", session.state());
     };
 
-    let expected = high_score_entry(session.game(), session.high_scores(), &entry);
-    assert_eq!(screen(&session), Some(expected));
+    let expected = high_score_entry(
+        session.game(),
+        session.high_scores(),
+        &entry,
+        &KeyBindings::default(),
+    );
+    assert_eq!(screen(&session, &KeyBindings::default()), Some(expected));
     assert_eq!(
-        screen(&session).unwrap().lines[0],
+        screen(&session, &KeyBindings::default()).unwrap().lines[0],
         format!(
             "Score {}, rank 1",
             thousands(session.game().score().points())
@@ -145,7 +156,7 @@ fn the_entry_screen_ranks_the_score_in_the_sessions_table() {
     assert!(matches!(session.state(), GameState::HighScoreEntry(_)));
 
     assert_eq!(
-        screen(&session).unwrap().lines[0],
+        screen(&session, &KeyBindings::default()).unwrap().lines[0],
         format!("Score {LOST_GAME_POINTS}, rank 2")
     );
 }
@@ -155,7 +166,7 @@ fn a_lost_game_that_makes_the_table_says_so() {
     let session = lost_game(HighScores::default());
 
     assert!(
-        screen(&session)
+        screen(&session, &KeyBindings::default())
             .unwrap()
             .lines
             .contains(&NEW_HIGH_SCORE.to_owned())
@@ -166,7 +177,7 @@ fn a_lost_game_that_makes_the_table_says_so() {
 fn a_lost_game_off_the_sessions_table_says_nothing_of_a_high_score() {
     let session = lost_game(unbeatable_table());
 
-    let lines = screen(&session).unwrap().lines;
+    let lines = screen(&session, &KeyBindings::default()).unwrap().lines;
     assert_eq!(lines[0], format!("Final score {LOST_GAME_POINTS}"));
     assert!(!lines.contains(&NEW_HIGH_SCORE.to_owned()), "{lines:?}");
 }

@@ -5,6 +5,7 @@ use crate::board::Board;
 use crate::level::LevelConfig;
 use crate::qix::Qix;
 use crate::rng::Rng;
+use crate::rules::Rules;
 use crate::sparx::Sparx;
 use crate::sparx_meter::SparxMeter;
 use crate::tuning::{BOARD_H, BOARD_W, FIRST_LEVEL};
@@ -22,13 +23,32 @@ impl Game {
     }
 
     /// Starts a new game on a free board of the same size, as
-    /// [`Game::new`] does: [`FIRST_LEVEL`], every life, no score, the
-    /// starting multiplier, the default claim threshold and no tick run.
-    /// Only the random sequence carries on.
+    /// [`Game::new`] does: [`FIRST_LEVEL`], no score, the starting
+    /// multiplier and no tick run, with the starting lives and the claim
+    /// threshold of [`Game::rules`]. Only the random sequence and the
+    /// rules carry on.
     pub fn restart(&mut self) {
         let board = Board::new(self.board.width(), self.board.height());
-        *self = Self::with_board(board, Vec::new(), Vec::new(), self.rng.clone());
+        let rules = self.rules;
+        *self = Self {
+            lives: rules.starting_lives.get(),
+            threshold: rules.threshold,
+            rules,
+            ..Self::with_board(board, Vec::new(), Vec::new(), self.rng.clone())
+        };
         self.start_level(FIRST_LEVEL);
+    }
+
+    /// The rules [`Game::restart`] sets the next game up with: the
+    /// default ones until [`Game::set_rules`].
+    pub fn rules(&self) -> Rules {
+        self.rules
+    }
+
+    /// Sets the rules every later [`Game::restart`] sets a game up with;
+    /// the game being played keeps its lives and claim threshold.
+    pub fn set_rules(&mut self, rules: Rules) {
+        self.rules = rules;
     }
 
     /// Starts level `level` (a level below [`FIRST_LEVEL`] starts the
@@ -38,9 +58,9 @@ impl Game {
     /// [`Sparx::spawn_level`] on its top edge and a full Sparx meter.
     ///
     /// The score, the lives, the multiplier, the claim threshold, the
-    /// tick count and the random sequence carry on; the stix, the fuse,
-    /// a grace period, the completed level and the last tick's events are
-    /// gone.
+    /// rules, the tick count and the random sequence carry on; the stix,
+    /// the fuse, a grace period, the completed level and the last tick's
+    /// events are gone.
     pub fn start_level(&mut self, level: u32) {
         let level = level.max(FIRST_LEVEL);
         let config = LevelConfig::for_level(level);
@@ -56,6 +76,7 @@ impl Game {
             score: self.score,
             multiplier: self.multiplier,
             threshold: self.threshold,
+            rules: self.rules,
             ..Self::with_board(board, qix, sparx, rng)
         };
     }

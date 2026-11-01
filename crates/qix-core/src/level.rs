@@ -3,6 +3,8 @@
 
 use std::ops::RangeInclusive;
 
+use serde::{Deserialize, Serialize};
+
 use crate::tuning::{
     BONUS_PER_PERCENT, CLAIM_THRESHOLD_DEFAULT, CLAIM_THRESHOLD_RANGE, DIFFICULTY_RAMP_LEVELS,
     FIRST_LEVEL, LEVEL_SPARX, LEVELS_PER_EXTRA_SPARX, QIX_SPEED, QIX_SPEED_PER_LEVEL,
@@ -69,8 +71,10 @@ impl LevelConfig {
 }
 
 /// The claimed fraction of the board that completes a level, always in
-/// [`CLAIM_THRESHOLD_RANGE`].
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+/// [`CLAIM_THRESHOLD_RANGE`]; (de)serialised as its fraction, clamped
+/// on the way in.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(from = "f32", into = "f32")]
 pub struct ClaimThreshold(f32);
 
 impl ClaimThreshold {
@@ -109,5 +113,18 @@ impl Default for ClaimThreshold {
     /// [`CLAIM_THRESHOLD_DEFAULT`].
     fn default() -> Self {
         Self(CLAIM_THRESHOLD_DEFAULT)
+    }
+}
+
+impl From<f32> for ClaimThreshold {
+    /// [`ClaimThreshold::new`].
+    fn from(fraction: f32) -> Self {
+        Self::new(fraction)
+    }
+}
+
+impl From<ClaimThreshold> for f32 {
+    fn from(threshold: ClaimThreshold) -> Self {
+        threshold.fraction()
     }
 }

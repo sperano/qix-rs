@@ -8,7 +8,8 @@ use eframe::egui::{FontId, Galley, Painter, Rect, pos2, vec2};
 use qix_core::tuning::SLOW_DRAW_FACTOR;
 use qix_core::{Game, GameState, HighScores, Session};
 
-use crate::input::{CONFIRM_KEY, DIR_KEYS, FAST_KEY, OVERLAY_KEY, PAUSE_KEY, SLOW_KEY};
+use crate::bindings::{Control, KeyBindings};
+use crate::input::{CONFIRM_KEY, OPEN_SETTINGS_KEY, OVERLAY_KEY, PAUSE_KEY};
 use crate::numbers::thousands;
 use crate::palette;
 use crate::render::high_score::{high_score_entry, table_rows};
@@ -43,12 +44,13 @@ pub struct Screen {
     pub lines: Vec<String>,
 }
 
-/// The screen `session` shows over the playfield, none while playing.
-pub fn screen(session: &Session) -> Option<Screen> {
+/// The screen `session` shows over the playfield, none while playing,
+/// naming the keys of `keys`.
+pub fn screen(session: &Session, keys: &KeyBindings) -> Option<Screen> {
     let game = session.game();
     let high_scores = session.high_scores();
     match session.state() {
-        GameState::Title => Some(title(high_scores)),
+        GameState::Title => Some(title(high_scores, keys)),
         GameState::Playing => None,
         GameState::Paused => Some(paused()),
         GameState::LevelComplete {
@@ -57,25 +59,30 @@ pub fn screen(session: &Session) -> Option<Screen> {
             split,
         } => Some(level_complete(game, fraction, bonus, split)),
         GameState::GameOver => Some(game_over(game, high_scores)),
-        GameState::HighScoreEntry(entry) => Some(high_score_entry(game, high_scores, &entry)),
+        GameState::HighScoreEntry(entry) => Some(high_score_entry(game, high_scores, &entry, keys)),
     }
 }
 
-/// The title screen, with `high_scores` and the controls.
-pub fn title(high_scores: &HighScores) -> Screen {
-    let dirs: Vec<_> = DIR_KEYS.iter().map(|(key, _)| key.name()).collect();
+/// The title screen, with `high_scores` and the controls in `keys`.
+pub fn title(high_scores: &HighScores, keys: &KeyBindings) -> Screen {
+    let dirs: Vec<_> = Control::DIRS
+        .iter()
+        .map(|&(control, _)| keys.key(control).name())
+        .collect();
+    let key = |control| keys.key(control).name();
     Screen {
         heading: "QIX".to_owned(),
         table: table_rows(high_scores),
         lines: vec![
             format!("{}: move", dirs.join("/")),
-            format!("hold {} while moving: draw fast", FAST_KEY.name()),
+            format!("hold {} while moving: draw fast", key(Control::Fast)),
             format!(
                 "hold {} while moving: draw slow, x{SLOW_DRAW_FACTOR} points",
-                SLOW_KEY.name()
+                key(Control::Slow)
             ),
             format!("{}: pause", PAUSE_KEY.name()),
             format!("{}: debug overlay", OVERLAY_KEY.name()),
+            format!("{}: settings", OPEN_SETTINGS_KEY.name()),
             String::new(),
             format!("Press {} to start", CONFIRM_KEY.name()),
         ],

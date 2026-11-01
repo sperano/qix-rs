@@ -6,8 +6,8 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::geometry::Dir;
-use crate::input::InputState;
-use crate::tuning::{INITIALS_LEN, INITIALS_REPEAT_DELAY_TICKS, INITIALS_REPEAT_TICKS};
+use crate::input::{DirRepeat, InputState};
+use crate::tuning::INITIALS_LEN;
 
 /// The first letter initials may hold, and the one an entry starts at.
 const FIRST_LETTER: u8 = b'A';
@@ -84,15 +84,12 @@ impl From<Initials> for String {
 /// letter under the cursor, left and right move the cursor, and confirm
 /// moves it on, or ends the entry on the last letter.
 ///
-/// A direction acts on the tick it is first held, then again after
-/// [`INITIALS_REPEAT_DELAY_TICKS`] and every [`INITIALS_REPEAT_TICKS`]
-/// after that while it stays held.
+/// A held direction repeats as [`DirRepeat`] reads it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InitialsEntry {
     initials: Initials,
     cursor: usize,
-    held: Option<Dir>,
-    held_ticks: u32,
+    repeat: DirRepeat,
 }
 
 impl Default for InitialsEntry {
@@ -107,8 +104,7 @@ impl InitialsEntry {
         Self {
             initials: Initials::FIRST,
             cursor: 0,
-            held: None,
-            held_ticks: 0,
+            repeat: DirRepeat::new(),
         }
     }
 
@@ -125,7 +121,7 @@ impl InitialsEntry {
     /// Applies one tick of `input`: the held direction, then confirm.
     /// Returns the initials once confirm is pressed on the last letter.
     pub fn tick(&mut self, input: &InputState) -> Option<Initials> {
-        if let Some(dir) = self.repeat(input.dir) {
+        if let Some(dir) = self.repeat.tick(input.dir) {
             self.apply(dir);
         }
         if !input.confirm {
@@ -136,19 +132,6 @@ impl InitialsEntry {
             self.cursor += 1;
             None
         }
-    }
-
-    /// The direction to act on this tick with `dir` held, if any.
-    fn repeat(&mut self, dir: Option<Dir>) -> Option<Dir> {
-        if dir != self.held {
-            self.held = dir;
-            self.held_ticks = 0;
-            return dir;
-        }
-        let dir = dir?;
-        self.held_ticks = self.held_ticks.saturating_add(1);
-        let repeated = self.held_ticks.checked_sub(INITIALS_REPEAT_DELAY_TICKS)?;
-        (repeated % INITIALS_REPEAT_TICKS == 0).then_some(dir)
     }
 
     /// Changes the letter or moves the cursor as `dir` asks.

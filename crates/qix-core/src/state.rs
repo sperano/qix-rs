@@ -7,6 +7,7 @@ use crate::game::Game;
 use crate::high_score::{HighScore, HighScores};
 use crate::initials::InitialsEntry;
 use crate::input::InputState;
+use crate::rules::Rules;
 
 /// Where the session stands, which decides what a tick does.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -86,6 +87,16 @@ impl Session {
     /// The high score table, with the scores entered this session.
     pub fn high_scores(&self) -> &HighScores {
         &self.high_scores
+    }
+
+    /// Sets the rules of the games to come (see [`Game::set_rules`]): on
+    /// the title screen, the game it shows restarts with them; any other
+    /// game keeps playing by its own.
+    pub fn set_rules(&mut self, rules: Rules) {
+        self.game.set_rules(rules);
+        if self.state == GameState::Title {
+            self.game.restart();
+        }
     }
 
     /// Advances the session by one step: [`Game::tick`] with `input`

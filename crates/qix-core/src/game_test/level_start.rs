@@ -10,7 +10,7 @@ use crate::tuning::{
 };
 use crate::{
     Board, ClaimThreshold, Dir, DrawKind, Game, InputState, LevelConfig, MarkerState, Point, Rng,
-    Sparx, SparxMeter, Vec2,
+    Rules, Sparx, SparxMeter, StartingLives, Vec2,
 };
 
 /// Levels the set-up tests start: the first, the first with two Qix and
@@ -23,6 +23,10 @@ const LEVELS: [u32; 3] = [
 
 /// The level [`a_played_game`] goes on to.
 const NEXT_LEVEL: u32 = FIRST_LEVEL + 1;
+
+/// The claim threshold and the starting lives of [`rules`].
+const RULES_THRESHOLD: f32 = 0.6;
+const RULES_LIVES: u32 = 5;
 
 /// Rounding slack on where the Qix start.
 const EPSILON: f32 = 1e-4;
@@ -259,4 +263,63 @@ fn a_restart_keeps_the_size_of_the_board() {
     game.restart();
 
     assert_eq!((game.board().width(), game.board().height()), (W, H));
+}
+
+/// Rules other than the default ones.
+fn rules() -> Rules {
+    let rules = Rules {
+        threshold: ClaimThreshold::new(RULES_THRESHOLD),
+        starting_lives: StartingLives::new(RULES_LIVES),
+    };
+    assert_ne!(rules, Rules::default());
+    rules
+}
+
+#[test]
+fn a_new_game_has_the_default_rules() {
+    assert_eq!(new_game().rules(), Rules::default());
+}
+
+#[test]
+fn new_rules_wait_for_the_restart() {
+    let mut game = new_game();
+
+    game.set_rules(rules());
+
+    assert_eq!(game.rules(), rules());
+    assert_eq!(game.lives(), STARTING_LIVES);
+    assert_eq!(game.claim_threshold(), ClaimThreshold::default());
+}
+
+#[test]
+fn a_restart_sets_the_game_up_by_its_rules() {
+    let mut game = a_played_game();
+    game.set_rules(rules());
+
+    game.restart();
+
+    assert_eq!(game.lives(), RULES_LIVES);
+    assert_eq!(game.claim_threshold(), rules().threshold);
+    assert_eq!(game.rules(), rules());
+}
+
+#[test]
+fn a_restart_drops_a_threshold_set_outside_the_rules() {
+    let mut game = new_game();
+    game.set_rules(rules());
+    game.set_claim_threshold(ClaimThreshold::new(*CLAIM_THRESHOLD_RANGE.start()));
+
+    game.restart();
+
+    assert_eq!(game.claim_threshold(), rules().threshold);
+}
+
+#[test]
+fn starting_a_level_keeps_the_rules() {
+    let mut game = new_game();
+    game.set_rules(rules());
+
+    game.start_level(NEXT_LEVEL);
+
+    assert_eq!(game.rules(), rules());
 }

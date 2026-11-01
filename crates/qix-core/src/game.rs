@@ -14,6 +14,7 @@ use crate::level::ClaimThreshold;
 use crate::marker::{Marker, MarkerState};
 use crate::qix::Qix;
 use crate::rng::Rng;
+use crate::rules::Rules;
 use crate::score::{Score, score_for_claim};
 use crate::sparx::{Sparx, SparxKind};
 use crate::sparx_meter::{MeterExpiry, SparxMeter};
@@ -63,6 +64,8 @@ pub struct Game {
     multiplier: u32,
     /// The claimed fraction that completes the level.
     threshold: ClaimThreshold,
+    /// What a restart sets the next game up with.
+    rules: Rules,
     /// A claim reached the threshold or split the Qix apart: the game no
     /// longer ticks.
     level_complete: bool,
@@ -97,6 +100,7 @@ impl Game {
             score: Score::default(),
             multiplier: STARTING_MULTIPLIER,
             threshold: ClaimThreshold::default(),
+            rules: Rules::default(),
             level_complete: false,
             events: Vec::new(),
         }
@@ -231,7 +235,8 @@ impl Game {
     }
 
     /// Sets the claimed fraction of the board that completes the level,
-    /// checked from the next claim on.
+    /// checked from the next claim on, until the next
+    /// [`Game::restart`]: see [`Game::set_rules`].
     pub fn set_claim_threshold(&mut self, threshold: ClaimThreshold) {
         self.threshold = threshold;
     }

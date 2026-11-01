@@ -1,5 +1,6 @@
 mod extra_lives;
 mod high_scores;
+mod rules;
 
 use crate::qix_test::qix_at;
 use crate::tuning::{
