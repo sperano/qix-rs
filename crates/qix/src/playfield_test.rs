@@ -180,13 +180,7 @@ fn count(shapes: &[Shape], kind: fn(&Shape) -> bool) -> usize {
 
 #[test]
 fn the_playfield_paints_the_claimed_cells_border_and_marker() {
-    let mut board = Board::new(BOARD_W, BOARD_H);
-    board.set_cell(0, 0, Cell::Claimed(DrawKind::Slow));
-    let mut rng = Rng::new(SEED);
-    let qix = Qix::spawn(&board, &mut rng);
-    let mut game = Game::with_board(board, vec![qix], Vec::new(), rng);
-    game.tick(&InputState::default());
-    let shapes = painted(&game, false);
+    let shapes = painted(&claimed_corner_game(), false);
     let meshes = count(&shapes, |s| matches!(s, Shape::Mesh(m) if !m.is_empty()));
     let segments = count(
         &shapes,
@@ -306,31 +300,70 @@ fn mesh_in(shape: &Shape, colour: egui::Color32) -> bool {
     matches!(shape, Shape::Mesh(mesh) if mesh.vertices.iter().any(|v| v.color == colour))
 }
 
-#[test]
-fn a_claim_being_animated_is_painted_over_the_cells_under_the_marker() {
-    let game = Game::new(Rng::new(SEED));
-    let hud = hud::hud(&game, 0);
+/// A game whose top-left cell is claimed slow, ticked once.
+fn claimed_corner_game() -> Game {
+    let mut board = Board::new(BOARD_W, BOARD_H);
+    board.set_cell(0, 0, Cell::Claimed(DrawKind::Slow));
+    let mut rng = Rng::new(SEED);
+    let qix = Qix::spawn(&board, &mut rng);
+    let mut game = Game::with_board(board, vec![qix], Vec::new(), rng);
+    game.tick(&InputState::default());
+    game
+}
+
+/// The shapes of `game`'s playfield with a fast claim of its second row
+/// animated `progress` through.
+fn painted_claim(game: &Game, progress: f32) -> Vec<Shape> {
+    let hud = hud::hud(game, 0);
     let runs = [CellRun {
-        row: 0,
+        row: 1,
         cols: 0..BOARD_W,
         kind: DrawKind::Fast,
     }];
-    let shapes = painted_scene(&Scene {
-        game: &game,
+    painted_scene(&Scene {
+        game,
         hud: &hud,
-        claim: Some((&runs, 0.0)),
+        claim: Some((&runs, progress)),
         screen: None,
         overlay: false,
-    });
-    let flash = shapes
-        .iter()
-        .position(|shape| mesh_in(shape, palette::CLAIM_FLASH));
-    let marker = shapes
-        .iter()
-        .position(|shape| mesh_in(shape, palette::MARKER_OUTLINE));
-    let flash = flash.expect("the claim is painted");
-    assert!(flash < marker.expect("the marker is painted"));
+    })
+}
+
+/// The index of the first shape of `shapes` that `is` picks.
+fn first(shapes: &[Shape], is: impl Fn(&Shape) -> bool, what: &str) -> usize {
+    let index = shapes.iter().position(is);
+    index.unwrap_or_else(|| panic!("no {what} painted: {shapes:?}"))
+}
+
+#[test]
+fn a_claim_being_animated_is_painted_over_the_cells_under_the_border() {
+    let game = claimed_corner_game();
+
+    let shapes = painted_claim(&game, 0.0);
+
+    let slow_fill = palette::fill(DrawKind::Slow);
+    let cells = first(&shapes, |s| mesh_in(s, slow_fill), "claimed cells");
+    let flash = first(&shapes, |s| mesh_in(s, palette::CLAIM_FLASH), "claim");
+    let border = first(
+        &shapes,
+        |s| matches!(s, Shape::LineSegment { stroke, .. } if stroke.color == palette::BORDER),
+        "border",
+    );
+    let marker = first(&shapes, |s| mesh_in(s, palette::MARKER_OUTLINE), "marker");
+    assert!(cells < flash, "{cells} {flash}");
+    assert!(flash < border, "{flash} {border}");
+    assert!(border < marker, "{border} {marker}");
     assert_eq!(painted(&game, false).len() + 1, shapes.len());
+}
+
+#[test]
+fn a_claim_at_the_end_of_its_animation_is_painted_in_its_fill() {
+    let game = claimed_corner_game();
+
+    let shapes = painted_claim(&game, 1.0);
+
+    assert!(shapes.iter().any(|s| mesh_in(s, palette::FAST_FILL)));
+    assert!(!shapes.iter().any(|s| mesh_in(s, palette::CLAIM_FLASH)));
 }
 
 /// Whether `shape` is the dimming of the playfield under a screen.
@@ -344,19 +377,45 @@ fn a_centred_screen_dims_the_playfield() {
     assert_eq!(count(&shapes, is_dim), 1);
 }
 
+/// The layout rectangle of each text shape of `shapes`, in painting
+/// order.
+fn text_rects(shapes: &[Shape]) -> Vec<Rect> {
+    shapes
+        .iter()
+        .filter_map(|shape| match shape {
+            Shape::Text(text) => Some(text.galley.rect.translate(text.pos.to_vec2())),
+            _ => None,
+        })
+        .collect()
+}
+
 #[test]
 fn a_banner_leaves_the_playfield_undimmed_and_sits_at_its_top() {
     let banner = screen::demo();
     let shapes = painted_placed(&Game::new(Rng::new(SEED)), &banner, Placement::Banner);
     assert_eq!(count(&shapes, is_dim), 0);
-    assert_eq!(texts(&shapes).len(), 1 + banner.lines.len());
+    let texts = texts(&shapes);
+    assert_eq!(texts, ["DEMO", "Press Enter to play"]);
     let field = to_screen(area(PAINTED_AREA)).transform_rect(playfield_units());
-    for shape in shapes.iter().filter(|s| matches!(s, Shape::Text(_))) {
-        let bounds = shape.visual_bounding_rect();
+    for bounds in text_rects(&shapes) {
         assert!(field.contains_rect(bounds), "{bounds:?} off {field:?}");
         assert!(
-            bounds.max.y < field.center().y,
-            "{bounds:?} below the middle"
+            (bounds.center().x - field.center().x).abs() < EPSILON,
+            "{bounds:?} off the middle of {field:?}"
         );
     }
+    let panel = shapes.iter().find_map(|shape| match shape {
+        Shape::Rect(rect) if rect.fill == palette::SCREEN_BACKGROUND => Some(rect.rect),
+        _ => None,
+    });
+    let panel = panel.expect("the banner has a panel");
+    assert!(
+        (panel.center().x - field.center().x).abs() < EPSILON,
+        "{panel:?}"
+    );
+    assert!(
+        (panel.min.y - (field.min.y + screen::BANNER_MARGIN)).abs() < EPSILON,
+        "{panel:?} not {} below {field:?}",
+        screen::BANNER_MARGIN
+    );
 }

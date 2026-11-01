@@ -9,14 +9,14 @@ use crate::rng::Rng;
 use crate::tuning::{DEMO_SEED, MARKER_STEP_TICKS, SLOW_STEP_TICKS, TICK_HZ};
 
 /// Height of the rectangles the demo claims, in cells.
-const BOX_HEIGHT: u32 = 45;
+pub(crate) const BOX_HEIGHT: u32 = 45;
 
 /// Width of the first two rectangles the demo claims, in cells.
-const BOX_WIDTH: u32 = 25;
+pub(crate) const BOX_WIDTH: u32 = 25;
 
 /// Width of the last rectangle, from the border to the left edge, in
 /// cells.
-const LAST_BOX_WIDTH: u32 = 20;
+pub(crate) const LAST_BOX_WIDTH: u32 = 20;
 
 /// Lattice steps the marker walks along the border between two
 /// rectangles.

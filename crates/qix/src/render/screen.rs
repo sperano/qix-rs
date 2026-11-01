@@ -31,7 +31,7 @@ const PADDING: f32 = 24.0;
 
 /// Space between the top of the playfield and a banner's panel, in
 /// points.
-const BANNER_MARGIN: f32 = 16.0;
+pub(crate) const BANNER_MARGIN: f32 = 16.0;
 
 /// Corner radius of a screen's panel, in points.
 const CORNER_RADIUS: f32 = 8.0;

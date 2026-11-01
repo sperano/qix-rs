@@ -1,3 +1,4 @@
+use crate::demo::{BOX_HEIGHT, BOX_WIDTH, LAST_BOX_WIDTH};
 use crate::qix_test::qix_at;
 use crate::tuning::{BOARD_H, BOARD_W, MARKER_STEP_TICKS, SLOW_STEP_TICKS};
 use crate::{
@@ -17,6 +18,14 @@ const SHORT_STIX_STEPS: u32 = 3;
 /// Dimensions of the small board of the short-script tests.
 const SHORT_W: u16 = 8;
 const SHORT_H: u16 = 3;
+
+/// Lattice steps of the slow draws of [`DEMO_SCRIPT`]: up, across and
+/// down the second rectangle, then up and across the last one.
+const SLOW_STEPS: u32 = 3 * BOX_HEIGHT + BOX_WIDTH + LAST_BOX_WIDTH;
+
+/// The claimed fraction of the board at the end of [`DEMO_SCRIPT`]: a
+/// sixth, as its documentation says.
+const DEMO_CLAIMED: std::ops::RangeInclusive<f32> = 0.15..=0.18;
 
 /// A script that completes the level of [`short_game`], then idles.
 const SHORT_SCRIPT: &[DemoStep] = &[
@@ -179,6 +188,7 @@ fn the_script_claims_fast_and_slow_cells_below_the_threshold() {
         !game.claim_threshold().is_reached(fraction),
         "claimed {fraction}"
     );
+    assert!(DEMO_CLAIMED.contains(&fraction), "claimed {fraction}");
 }
 
 #[test]
@@ -205,8 +215,7 @@ fn the_script_draws_slow_stix_at_the_slow_step_rate() {
         .map(|step| step.ticks)
         .sum();
 
-    assert!(slow_ticks > 0);
-    assert_eq!(slow_ticks % SLOW_STEP_TICKS, 0);
+    assert_eq!(slow_ticks, SLOW_STEPS * SLOW_STEP_TICKS);
 }
 
 #[test]

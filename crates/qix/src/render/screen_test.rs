@@ -9,7 +9,7 @@ use qix_core::{
 
 use crate::bindings::{Control, KeyBindings};
 use crate::render::high_score::table_rows;
-use crate::render::screen::{Screen, game_over, level_complete, paused, screen, title};
+use crate::render::screen::{Screen, demo, game_over, level_complete, paused, screen, title};
 
 /// Seed of every game the tests play.
 const SEED: u64 = 1;
@@ -253,6 +253,14 @@ fn a_paused_session_shows_the_pause_screen() {
     session.tick(&press(false, true));
     assert_eq!(screen(&session, &KeyBindings::default()), Some(paused()));
     assert_eq!(paused().lines, ["Press Escape to resume"]);
+}
+
+#[test]
+fn the_demo_banner_says_demo_and_names_the_confirm_key() {
+    let banner = demo();
+    assert_eq!(banner.heading, "DEMO");
+    assert!(banner.table.is_empty());
+    assert_eq!(banner.lines, ["Press Enter to play"]);
 }
 
 #[test]

@@ -244,8 +244,9 @@ fn the_demo_ends_back_on_the_title() {
     assert_eq!(app.claim_fill().fresh(), None);
 }
 
-#[test]
-fn a_claim_of_the_demo_starts_the_fill_animation() {
+/// An app idled until the demo's first claim, checking that no fill
+/// animation runs before it.
+fn app_at_the_first_claim_of_the_demo() -> QixApp {
     let mut app = QixApp::new(None);
     idle(&mut app, ATTRACT_DELAY_TICKS);
     let claimed = |app: &QixApp| app.shown_game().board().claimed_fraction() > 0.0;
@@ -258,8 +259,25 @@ fn a_claim_of_the_demo_starts_the_fill_animation() {
         idle(&mut app, 1);
     }
     assert!(claimed(&app), "the demo claims nothing");
+    app
+}
+
+#[test]
+fn a_claim_of_the_demo_starts_the_fill_animation() {
+    let app = app_at_the_first_claim_of_the_demo();
 
     let (runs, progress) = app.claim_fill().fresh().expect("the claim animates");
     assert!(!runs.is_empty());
     assert_eq!(progress, 0.0);
+}
+
+#[test]
+fn stopping_the_demo_while_its_claim_animates_stops_the_animation() {
+    let mut app = app_at_the_first_claim_of_the_demo();
+    assert!(app.claim_fill().fresh().is_some());
+
+    app.tick(&CONFIRM);
+
+    assert!(std::ptr::eq(app.shown_game(), app.session().game()));
+    assert_eq!(app.claim_fill().fresh(), None);
 }
