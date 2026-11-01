@@ -19,8 +19,8 @@ use crate::render::board::{CellRun, claimed_runs};
 use crate::render::claimed::ClaimedTexture;
 use crate::render::hud;
 
-/// The most a frame may take on the CPU, building the shapes and
-/// tessellating them, in milliseconds.
+/// The most the mean frame may take on the CPU, building the shapes and
+/// tessellating them, averaged over the measured frames, in milliseconds.
 const FRAME_BUDGET_MS: f64 = 4.0;
 
 /// Size of the window the frames are painted in: 1080p at one pixel per
@@ -38,7 +38,7 @@ const MEASURED_FRAMES: u32 = 300;
 const SEED: u64 = 1;
 
 /// Side of the free square left at the centre of a nearly full board, in
-/// cells: about 4% of the board, around the Qix.
+/// cells: about 3% of the board (576 of 19200 cells), around the Qix.
 const FREE_SIDE: u16 = 24;
 
 /// Width of the columns of one kind on [`banded_board`], in cells.
@@ -170,8 +170,9 @@ fn report(label: &str, time: FrameTime) {
 }
 
 /// Measures painting `board`: the board alone, the whole frame, the whole
-/// frame animating a claim of its whole claimed area, and the whole frame
-/// redrawing the claimed cells' texture every frame, as on a claim.
+/// frame animating a claim of the nearly full area (the free square
+/// excluded), and the whole frame redrawing the claimed cells' texture
+/// every frame, as on a claim.
 fn measure_board(name: &str, board: Board) {
     let game = game_on(board);
     let empty = game_on(Board::new(BOARD_W, BOARD_H));
