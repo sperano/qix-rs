@@ -184,10 +184,11 @@ fn a_lost_game_off_the_sessions_table_says_nothing_of_a_high_score() {
     assert!(!lines.contains(&NEW_HIGH_SCORE.to_owned()), "{lines:?}");
 }
 
-/// Bindings with Up on W.
-fn up_on_w() -> KeyBindings {
+/// Bindings with Up on W and Left on A.
+fn up_on_w_left_on_a() -> KeyBindings {
     let mut keys = KeyBindings::default();
     assert!(keys.bind(Control::Up, Key::W));
+    assert!(keys.bind(Control::Left, Key::A));
     keys
 }
 
@@ -197,11 +198,12 @@ fn the_entry_screen_names_the_bound_keys() {
         &claimed_game(),
         &HighScores::default(),
         &InitialsEntry::new(),
-        &up_on_w(),
+        &up_on_w_left_on_a(),
     )
     .lines;
 
     assert_eq!(lines[2], "W/Down: change the letter");
+    assert_eq!(lines[3], "A/Right: move");
 }
 
 #[test]
@@ -210,7 +212,8 @@ fn a_session_entering_initials_names_the_bound_keys() {
     session.tick(&CONFIRM);
     assert!(matches!(session.state(), GameState::HighScoreEntry(_)));
 
-    let lines = screen(&session, &up_on_w()).unwrap().lines;
+    let lines = screen(&session, &up_on_w_left_on_a()).unwrap().lines;
 
     assert_eq!(lines[2], "W/Down: change the letter");
+    assert_eq!(lines[3], "A/Right: move");
 }

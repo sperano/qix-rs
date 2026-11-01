@@ -240,6 +240,16 @@ fn a_partial_key_table_takes_the_default_keys_and_keeps_the_rest() {
 }
 
 #[test]
+fn a_partial_key_table_colliding_with_a_default_key_loads_the_default_bindings() {
+    let storage = stored("(starting_lives:5,keys:(up:ArrowDown))");
+
+    let settings = load_settings(Some(&storage));
+
+    assert_eq!(settings.keys, KeyBindings::default());
+    assert_eq!(settings.starting_lives.get(), 5);
+}
+
+#[test]
 fn an_unknown_key_name_takes_the_default_key_and_keeps_the_rest() {
     let storage = stored("(starting_lives:5,keys:(up:NoSuchKey,fast:J))");
 
