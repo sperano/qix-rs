@@ -177,3 +177,13 @@ fn confirm_with_left_turns_forward() {
 
     assert_eq!(book.page(), Page::Scoring);
 }
+
+#[test]
+fn a_direction_held_through_confirm_does_not_turn_again_next_tick() {
+    let mut book = RulesBook::new();
+
+    assert!(!book.tick(&confirm_holding(Dir::Right)));
+    assert!(!book.tick(&holding(Dir::Right)));
+
+    assert_eq!(book.page(), Page::Dangers);
+}
