@@ -140,3 +140,40 @@ fn no_input_keeps_the_book_open_on_its_page() {
 
     assert_eq!(book.page(), Page::Dangers);
 }
+
+/// Confirm pressed with `dir` newly held.
+fn confirm_holding(dir: Dir) -> InputState {
+    InputState {
+        confirm: true,
+        ..holding(dir)
+    }
+}
+
+#[test]
+fn confirm_with_a_new_direction_turns_one_page() {
+    let mut book = RulesBook::new();
+
+    assert!(!book.tick(&confirm_holding(Dir::Right)));
+
+    assert_eq!(book.page(), Page::Dangers);
+}
+
+#[test]
+fn confirm_with_a_new_direction_does_not_close_the_book_early() {
+    let mut book = RulesBook::new();
+    press(&mut book, Dir::Right);
+
+    assert!(!book.tick(&confirm_holding(Dir::Right)));
+
+    assert_eq!(book.page(), Page::Scoring);
+}
+
+#[test]
+fn confirm_with_left_turns_forward() {
+    let mut book = at_last_page();
+    press(&mut book, Dir::Left);
+
+    assert!(!book.tick(&confirm_holding(Dir::Left)));
+
+    assert_eq!(book.page(), Page::Scoring);
+}

@@ -171,8 +171,9 @@ fn clock_seed() -> u64 {
 
 impl QixApp {
     /// Samples the keyboard and runs as many ticks as the frame's time
-    /// owes, of the settings screen while it is open, of the session
-    /// otherwise. Returns the settings the screen closed with, if it did.
+    /// owes, of the settings or the rules screen while one is open, of the
+    /// session otherwise. Returns the settings the settings screen closed
+    /// with, if it did.
     fn advance(&mut self, ctx: &egui::Context) -> Option<Settings> {
         let keys = match &self.menu {
             Some(Menu::Settings(menu)) => menu.settings().keys,

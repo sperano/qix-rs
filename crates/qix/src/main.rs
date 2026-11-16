@@ -27,6 +27,8 @@ mod timestep;
 mod web;
 
 #[cfg(test)]
+mod app_menu_test;
+#[cfg(test)]
 mod app_test;
 #[cfg(test)]
 mod bindings_test;

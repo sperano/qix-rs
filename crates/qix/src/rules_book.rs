@@ -2,8 +2,9 @@
 //! at a time.
 //!
 //! Left and right turn the page, stopping at the first and the last;
-//! confirm turns to the next page, or leaves from the last one; pause
-//! leaves. Directions repeat as [`DirRepeat`] reads them.
+//! confirm turns to the next page, or leaves from the last one, and
+//! overrides a direction in the same tick; pause leaves. Directions
+//! repeat as [`DirRepeat`] reads them.
 
 use qix_core::{Dir, DirRepeat, InputState};
 
@@ -55,14 +56,21 @@ impl RulesBook {
         if input.pause {
             return true;
         }
-        match self.repeat.tick(input.dir) {
+        let dir = self.repeat.tick(input.dir);
+        if input.confirm {
+            return self.confirm();
+        }
+        match dir {
             Some(Dir::Left) => self.page = self.page.saturating_sub(1),
             Some(Dir::Right) => self.next_page(),
             Some(Dir::Up | Dir::Down) | None => {}
         }
-        if !input.confirm {
-            return false;
-        }
+        false
+    }
+
+    /// Turns to the next page; returns whether the screen closes, from
+    /// the last page.
+    fn confirm(&mut self) -> bool {
         if self.is_last_page() {
             return true;
         }
