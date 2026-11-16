@@ -4,7 +4,7 @@ use crate::bindings::{Control, KeyBindings};
 use crate::input::RESERVED_KEYS;
 
 /// The keys the menus need, which no control may take.
-const MENU_KEYS: [Key; 4] = [Key::Enter, Key::Escape, Key::F1, Key::F2];
+const MENU_KEYS: [Key; 5] = [Key::Enter, Key::Escape, Key::F1, Key::F2, Key::F3];
 
 /// A key no default binding uses.
 const FREE_KEY: Key = Key::W;

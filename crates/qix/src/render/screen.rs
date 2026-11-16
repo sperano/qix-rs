@@ -9,7 +9,7 @@ use qix_core::tuning::SLOW_DRAW_FACTOR;
 use qix_core::{Game, GameState, HighScores, Session};
 
 use crate::bindings::{Control, KeyBindings};
-use crate::input::{CONFIRM_KEY, OPEN_SETTINGS_KEY, OVERLAY_KEY, PAUSE_KEY};
+use crate::input::{CONFIRM_KEY, OPEN_RULES_KEY, OPEN_SETTINGS_KEY, OVERLAY_KEY, PAUSE_KEY};
 use crate::numbers::thousands;
 use crate::palette;
 use crate::render::high_score::{high_score_entry, table_rows};
@@ -87,6 +87,7 @@ pub fn title(high_scores: &HighScores, keys: &KeyBindings) -> Screen {
             format!("{}: pause", PAUSE_KEY.name()),
             format!("{}: debug overlay", OVERLAY_KEY.name()),
             format!("{}: settings", OPEN_SETTINGS_KEY.name()),
+            format!("{}: rules", OPEN_RULES_KEY.name()),
             String::new(),
             format!("Press {} to start", CONFIRM_KEY.name()),
         ],

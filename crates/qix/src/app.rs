@@ -1,7 +1,7 @@
 //! The eframe application: samples input, runs the core ticks each frame
 //! owes, plays the sounds of the session's events, paints the playfield
-//! with the HUD and the screen of the session's state, the settings or the
-//! attract-mode demo, and keeps the high score table and the settings in
+//! with the HUD and the screen of the session's state, the settings, the
+//! rules or the attract-mode demo, and keeps the high score table and the settings in
 //! eframe's storage.
 
 use eframe::{Storage, egui};
@@ -17,11 +17,20 @@ use crate::persist;
 use crate::playfield::{self, Placement, Scene};
 use crate::render::claimed::ClaimedTexture;
 use crate::render::screen::{self, Screen};
-use crate::render::{hud, settings::settings_screen};
+use crate::render::{hud, rules::rules_screen, settings::settings_screen};
+use crate::rules_book::RulesBook;
 use crate::settings::Settings;
 use crate::settings_menu::SettingsMenu;
 use crate::sound::{self, Sound};
 use crate::timestep::FixedTimestep;
+
+/// A screen open over the title screen, which takes the input while it
+/// is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Menu {
+    Settings(SettingsMenu),
+    Rules(RulesBook),
+}
 
 /// The application state kept between frames.
 #[derive(Debug)]
@@ -35,8 +44,9 @@ pub struct QixApp {
     saved_high_scores: HighScores,
     /// The settings in force, as last written to the storage.
     settings: Settings,
-    /// The settings screen, while it is open over the title screen.
-    menu: Option<SettingsMenu>,
+    /// The settings or the rules screen, while one is open over the
+    /// title screen.
+    menu: Option<Menu>,
     /// The window is to take the size of the settings' scale on the next
     /// frame.
     resize_window: bool,
@@ -85,6 +95,21 @@ impl QixApp {
     /// The session the app plays.
     pub(crate) fn session(&self) -> &Session {
         &self.session
+    }
+
+    /// The screen open over the title screen, if any.
+    #[cfg(test)]
+    pub(crate) fn menu(&self) -> Option<&Menu> {
+        self.menu.as_ref()
+    }
+
+    /// Opens `menu` over the title screen and stops the demo; does
+    /// nothing off the title, or while a screen is open already.
+    pub(crate) fn open(&mut self, menu: Menu) {
+        if self.menu.is_none() && self.session.state() == GameState::Title {
+            self.menu = Some(menu);
+            self.attract.reset();
+        }
     }
 
     /// The attract-mode demo of the title screen.
@@ -149,31 +174,31 @@ impl QixApp {
     /// owes, of the settings screen while it is open, of the session
     /// otherwise. Returns the settings the screen closed with, if it did.
     fn advance(&mut self, ctx: &egui::Context) -> Option<Settings> {
-        let keys = self
-            .menu
-            .map_or(self.settings.keys, |menu| menu.settings().keys);
-        let (sample, overlay_toggled, settings_opened, pressed, dt) = ctx.input(|i| {
-            let toggled = input::overlay_toggled(i);
-            let opened = input::settings_opened(i);
-            (
-                input::sample(i, &keys),
-                toggled,
-                opened,
-                input::pressed_keys(i),
-                i.stable_dt,
-            )
-        });
+        let keys = match &self.menu {
+            Some(Menu::Settings(menu)) => menu.settings().keys,
+            Some(Menu::Rules(_)) | None => self.settings.keys,
+        };
+        let (sample, overlay_toggled, settings_opened, rules_opened, pressed, dt) =
+            ctx.input(|i| {
+                (
+                    input::sample(i, &keys),
+                    input::overlay_toggled(i),
+                    input::settings_opened(i),
+                    input::rules_opened(i),
+                    input::pressed_keys(i),
+                    i.stable_dt,
+                )
+            });
         self.overlay ^= overlay_toggled;
-        match &mut self.menu {
-            Some(menu) if menu.is_capturing() => {
-                pressed.into_iter().any(|key| menu.capture(key));
-            }
-            Some(_) => {}
-            None if settings_opened && self.session.state() == GameState::Title => {
-                self.menu = Some(SettingsMenu::new(self.settings));
-                self.attract.reset();
-            }
-            None => {}
+        if let Some(Menu::Settings(menu)) = &mut self.menu
+            && menu.is_capturing()
+        {
+            pressed.into_iter().any(|key| menu.capture(key));
+        }
+        if settings_opened {
+            self.open(Menu::Settings(SettingsMenu::new(self.settings)));
+        } else if rules_opened {
+            self.open(Menu::Rules(RulesBook::new()));
         }
         self.input.record(sample);
         (0..self.timestep.advance(dt)).find_map(|_| {
@@ -182,24 +207,29 @@ impl QixApp {
         })
     }
 
-    /// Runs one tick with `input`: of the settings screen while it is
-    /// open, of the session otherwise, with the attract mode while it is
-    /// on the title screen; then of the claim animation of the game shown.
-    /// Returns the settings the screen closed with, if it did.
+    /// Runs one tick with `input`: of the settings or the rules screen
+    /// while one is open, of the session otherwise, with the attract mode
+    /// while it is on the title screen; then of the claim animation of the
+    /// game shown. Returns the settings the settings screen closed with,
+    /// if it did.
     pub(crate) fn tick(&mut self, input: &InputState) -> Option<Settings> {
-        let closed = match &mut self.menu {
-            Some(menu) => menu.tick(input),
+        let (closed, settings) = match &mut self.menu {
+            Some(Menu::Settings(menu)) => {
+                let settings = menu.tick(input);
+                (settings.is_some(), settings)
+            }
+            Some(Menu::Rules(book)) => (book.tick(input), None),
             None => {
                 self.tick_session(input);
-                None
+                (false, None)
             }
         };
-        if closed.is_some() {
+        if closed {
             self.menu = None;
         }
         let shown = shown_game(&self.attract, &self.session);
         self.claim_fill.tick(shown.board());
-        closed
+        settings
     }
 
     /// Ticks the session with `input`, and the attract mode before it on
@@ -230,12 +260,18 @@ impl QixApp {
         self.claimed.texture(ctx, board)
     }
 
-    /// The screen over the playfield and where it goes: the settings
-    /// while they are open, the banner of the demo while one plays, the
-    /// screen of the session's state otherwise.
-    fn screen(&self) -> Option<(Screen, Placement)> {
-        if let Some(menu) = &self.menu {
-            return Some((settings_screen(menu), Placement::Centred));
+    /// The screen over the playfield and where it goes: the settings or
+    /// the rules while one is open, the banner of the demo while one
+    /// plays, the screen of the session's state otherwise.
+    pub(crate) fn screen(&self) -> Option<(Screen, Placement)> {
+        match &self.menu {
+            Some(Menu::Settings(menu)) => {
+                return Some((settings_screen(menu), Placement::Centred));
+            }
+            Some(Menu::Rules(book)) => {
+                return Some((rules_screen(book, &self.settings), Placement::Centred));
+            }
+            None => {}
         }
         if self.attract.demo().is_some() {
             return Some((screen::demo(), Placement::Banner));

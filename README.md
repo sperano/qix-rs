@@ -16,6 +16,7 @@ Sparx. Slow drawing earns more points but leaves the player exposed longer.
 | Escape | Pause or resume |
 | F1 | Toggle the debug overlay (claimed percentage, lives, tick count) |
 | F2 | On the title screen, open the settings (claim threshold, starting lives, key bindings, window scale) |
+| F3 | On the title screen, open the rules; Left/Right turn the page, Enter goes to the next one, Escape goes back |
 
 Left idle for ten seconds, the title screen plays a short demo; any game
 control stops it, and Enter also starts a game.

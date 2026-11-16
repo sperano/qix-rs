@@ -3,10 +3,14 @@ use qix_core::tuning::ATTRACT_DELAY_TICKS;
 use qix_core::tuning::MARKER_STEP_TICKS;
 use qix_core::{DEMO_SCRIPT, Dir, DrawKind, GameState, HighScores, InputState};
 
-use crate::app::{QixApp, save_if_changed};
+use crate::app::{Menu, QixApp, save_if_changed};
 use crate::persist::{HIGH_SCORES_KEY, SETTINGS_KEY, load_high_scores, load_settings};
 use crate::persist_test::{MemoryStorage, entry, stored};
+use crate::playfield::Placement;
+use crate::render::rules::rules_screen;
+use crate::rules_book::{PAGES, RulesBook};
 use crate::settings::{SCALE_RANGE, Scale, Settings};
+use crate::settings_menu::SettingsMenu;
 use crate::sound::Sound;
 
 /// The stored value of settings that only change the starting lives.
@@ -340,4 +344,133 @@ fn the_demo_queues_no_sound() {
     let app = app_at_the_first_claim_of_the_demo();
 
     assert_eq!(app.sounds(), []);
+}
+
+/// One tick of input with pause pressed.
+const PAUSE: InputState = InputState {
+    dir: None,
+    fast: false,
+    slow: false,
+    confirm: false,
+    pause: true,
+};
+
+/// An app on the title screen with the rules open.
+fn app_with_the_rules() -> QixApp {
+    let mut app = QixApp::new(None);
+    app.open(Menu::Rules(RulesBook::new()));
+    assert_eq!(app.menu(), Some(&Menu::Rules(RulesBook::new())));
+    app
+}
+
+#[test]
+fn the_rules_open_over_the_title_and_stop_the_demo() {
+    let mut app = QixApp::new(None);
+    idle(&mut app, ATTRACT_DELAY_TICKS);
+    assert!(app.attract().demo().is_some());
+
+    app.open(Menu::Rules(RulesBook::new()));
+
+    assert!(app.attract().demo().is_none());
+    let (screen, placement) = app.screen().expect("the rules show");
+    assert_eq!(
+        screen,
+        rules_screen(&RulesBook::new(), &Settings::default())
+    );
+    assert_eq!(placement, Placement::Centred);
+}
+
+#[test]
+fn the_rules_do_not_open_off_the_title() {
+    let mut app = QixApp::new(None);
+    app.tick(&CONFIRM);
+
+    app.open(Menu::Rules(RulesBook::new()));
+
+    assert_eq!(app.menu(), None);
+    assert_eq!(app.session().state(), GameState::Playing);
+}
+
+#[test]
+fn the_rules_do_not_open_over_the_settings() {
+    let mut app = QixApp::new(None);
+    let settings = Menu::Settings(SettingsMenu::new(Settings::default()));
+    app.open(settings);
+
+    app.open(Menu::Rules(RulesBook::new()));
+
+    assert_eq!(app.menu(), Some(&settings));
+}
+
+#[test]
+fn the_rules_name_the_settings_in_force() {
+    let mut app = QixApp::new(None);
+    app.apply_settings(load_settings(Some(&stored_settings(FIVE_LIVES))), None);
+    app.open(Menu::Rules(RulesBook::new()));
+
+    let (screen, _) = app.screen().expect("the rules show");
+
+    let settings = load_settings(Some(&stored_settings(FIVE_LIVES)));
+    assert_eq!(screen, rules_screen(&RulesBook::new(), &settings));
+}
+
+#[test]
+fn confirm_in_the_rules_turns_the_page_instead_of_starting_a_game() {
+    let mut app = app_with_the_rules();
+
+    assert_eq!(app.tick(&CONFIRM), None);
+
+    assert_eq!(app.session().state(), GameState::Title);
+    let Some(Menu::Rules(book)) = app.menu() else {
+        panic!("the rules close");
+    };
+    assert_eq!(book.page_index(), 1);
+}
+
+#[test]
+fn no_demo_plays_while_the_rules_are_open() {
+    let mut app = app_with_the_rules();
+
+    idle(&mut app, 2 * ATTRACT_DELAY_TICKS);
+
+    assert!(app.attract().demo().is_none());
+    assert!(matches!(app.menu(), Some(Menu::Rules(_))));
+}
+
+#[test]
+fn pause_closes_the_rules_back_to_the_title() {
+    let mut app = app_with_the_rules();
+
+    assert_eq!(app.tick(&PAUSE), None);
+
+    assert_eq!(app.menu(), None);
+    assert_eq!(app.session().state(), GameState::Title);
+    assert_eq!(
+        app.screen().map(|(screen, _)| screen.heading),
+        Some("QIX".to_owned())
+    );
+}
+
+#[test]
+fn confirm_on_the_last_page_of_the_rules_closes_them() {
+    let mut app = app_with_the_rules();
+    for _ in 1..PAGES.len() {
+        app.tick(&CONFIRM);
+    }
+    assert!(matches!(app.menu(), Some(Menu::Rules(book)) if book.is_last_page()));
+
+    app.tick(&CONFIRM);
+
+    assert_eq!(app.menu(), None);
+    assert_eq!(app.session().state(), GameState::Title);
+}
+
+#[test]
+fn closing_the_settings_still_returns_their_settings() {
+    let mut app = QixApp::new(None);
+    app.open(Menu::Settings(SettingsMenu::new(Settings::default())));
+
+    assert_eq!(app.tick(&PAUSE), Some(Settings::default()));
+
+    assert_eq!(app.menu(), None);
 }

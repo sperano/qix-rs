@@ -7,6 +7,7 @@ pub mod enemies;
 pub mod high_score;
 pub mod hud;
 pub mod overlay;
+pub mod rules;
 pub mod screen;
 pub mod settings;
 pub mod sprite;
@@ -25,6 +26,8 @@ mod high_score_test;
 mod hud_test;
 #[cfg(test)]
 mod overlay_test;
+#[cfg(test)]
+mod rules_test;
 #[cfg(test)]
 mod screen_test;
 #[cfg(test)]

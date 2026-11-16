@@ -13,6 +13,7 @@ mod palette;
 mod persist;
 mod playfield;
 mod render;
+mod rules_book;
 mod settings;
 mod settings_menu;
 mod sound;
@@ -41,6 +42,8 @@ mod persist_test;
 mod playfield_perf_test;
 #[cfg(test)]
 mod playfield_test;
+#[cfg(test)]
+mod rules_book_test;
 #[cfg(test)]
 mod settings_menu_test;
 #[cfg(test)]
