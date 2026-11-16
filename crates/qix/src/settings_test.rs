@@ -205,6 +205,8 @@ fn broken_key_bindings_load_as_the_default_ones_and_keep_the_rest() {
         "(up:W,down:W,left:A,right:D,fast:J,slow:K)",
         "(up:Enter,down:S,left:A,right:D,fast:J,slow:K)",
         "(up:W,down:S,left:A,right:D,fast:F1,slow:K)",
+        // Bound before F3 opened the rules.
+        "(up:W,down:S,left:A,right:D,fast:J,slow:F3)",
     ] {
         let storage = stored(&format!("(starting_lives:5,keys:{keys})"));
 

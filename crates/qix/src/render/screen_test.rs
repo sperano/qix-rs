@@ -232,6 +232,7 @@ fn the_title_screen_lists_the_controls() {
                 "Escape: pause".to_owned(),
                 "F1: debug overlay".to_owned(),
                 "F2: settings".to_owned(),
+                "F3: rules".to_owned(),
                 String::new(),
                 "Press Enter to start".to_owned(),
             ],

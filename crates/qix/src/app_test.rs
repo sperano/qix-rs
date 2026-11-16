@@ -174,7 +174,7 @@ fn applied_settings_set_up_the_next_game() {
 }
 
 /// One tick of input with confirm pressed.
-const CONFIRM: InputState = InputState {
+pub(crate) const CONFIRM: InputState = InputState {
     dir: None,
     fast: false,
     slow: false,
@@ -183,7 +183,7 @@ const CONFIRM: InputState = InputState {
 };
 
 /// Runs `ticks` ticks of `app` with no control held.
-fn idle(app: &mut QixApp, ticks: u32) {
+pub(crate) fn idle(app: &mut QixApp, ticks: u32) {
     for _ in 0..ticks {
         app.tick(&InputState::default());
     }

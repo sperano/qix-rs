@@ -13,6 +13,7 @@ mod palette;
 mod persist;
 mod playfield;
 mod render;
+mod rules_book;
 mod settings;
 mod settings_menu;
 mod sound;
@@ -25,6 +26,8 @@ mod timestep;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
+#[cfg(test)]
+mod app_menu_test;
 #[cfg(test)]
 mod app_test;
 #[cfg(test)]
@@ -41,6 +44,8 @@ mod persist_test;
 mod playfield_perf_test;
 #[cfg(test)]
 mod playfield_test;
+#[cfg(test)]
+mod rules_book_test;
 #[cfg(test)]
 mod settings_menu_test;
 #[cfg(test)]

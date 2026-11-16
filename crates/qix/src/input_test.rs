@@ -2,7 +2,9 @@ use eframe::egui::{self, Event, Key, Modifiers};
 use qix_core::{Dir, InputState};
 
 use crate::bindings::{Control, KeyBindings};
-use crate::input::{InputLatch, overlay_toggled, pressed_keys, sample, settings_opened};
+use crate::input::{
+    InputLatch, overlay_toggled, pressed_keys, rules_opened, sample, settings_opened,
+};
 
 /// A key no default binding uses.
 const FREE_KEY: Key = Key::W;
@@ -187,6 +189,25 @@ fn a_fresh_f2_press_opens_the_settings() {
         Key::F2,
         true,
         true
+    )])));
+}
+
+#[test]
+fn a_fresh_f3_press_opens_the_rules() {
+    assert!(rules_opened(&with_events(vec![key_event(
+        Key::F3,
+        true,
+        false
+    )])));
+    assert!(!rules_opened(&with_events(vec![key_event(
+        Key::F3,
+        true,
+        true
+    )])));
+    assert!(!rules_opened(&with_events(vec![key_event(
+        Key::F2,
+        true,
+        false
     )])));
 }
 

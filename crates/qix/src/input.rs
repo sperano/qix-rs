@@ -10,10 +10,18 @@ pub const PAUSE_KEY: Key = Key::Escape;
 pub const OVERLAY_KEY: Key = Key::F1;
 /// Opens the settings from the title screen.
 pub const OPEN_SETTINGS_KEY: Key = Key::F2;
+/// Opens the rules from the title screen.
+pub const OPEN_RULES_KEY: Key = Key::F3;
 
 /// The keys of fixed meaning, which no control may be bound to: they
 /// work whatever the bindings, the settings screen included.
-pub const RESERVED_KEYS: [Key; 4] = [CONFIRM_KEY, PAUSE_KEY, OVERLAY_KEY, OPEN_SETTINGS_KEY];
+pub const RESERVED_KEYS: [Key; 5] = [
+    CONFIRM_KEY,
+    PAUSE_KEY,
+    OVERLAY_KEY,
+    OPEN_SETTINGS_KEY,
+    OPEN_RULES_KEY,
+];
 
 /// Reads one frame's controls: held keys for movement and drawing, as
 /// `keys` binds them, fresh presses (not key repeats) for confirm and
@@ -36,6 +44,11 @@ pub fn sample(input: &egui::InputState, keys: &KeyBindings) -> InputState {
 /// repeats.
 pub fn settings_opened(input: &egui::InputState) -> bool {
     first_press(input, OPEN_SETTINGS_KEY)
+}
+
+/// Whether the rules key was pressed this frame, ignoring key repeats.
+pub fn rules_opened(input: &egui::InputState) -> bool {
+    first_press(input, OPEN_RULES_KEY)
 }
 
 /// The keys that went down this frame, in order, ignoring key repeats.
